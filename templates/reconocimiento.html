@@ -296,39 +296,58 @@
         }
 
         // Voz: bloquea escaneo mientras habla, luego resetea UI
-        let _hablarTimeout = null;
-
         function hablar(texto) {
+            hablando = true;
+
             if (!('speechSynthesis' in window) || !vozDesbloqueada) {
-                setTimeout(resetUI, 4000);
+                setTimeout(() => { hablando = false; resetUI(); }, 5000);
                 return;
             }
 
             try {
-                speechSynthesis.cancel();
+                if (speechSynthesis.speaking || speechSynthesis.pending) {
+                    speechSynthesis.cancel();
+                    setTimeout(() => _speak(texto), 100);
+                } else {
+                    _speak(texto);
+                }
+            } catch (e) {
+                hablando = false;
+                setTimeout(resetUI, 2000);
+            }
+        }
+
+        function _speak(texto) {
+            try {
                 const utter = new SpeechSynthesisUtterance(texto);
                 utter.lang = 'es-ES';
                 utter.rate = 1.0;
-                utter.volume = 0.9;
+                utter.volume = 1.0;
 
-                hablando = true;
+                const safetyTimer = setTimeout(() => {
+                    hablando = false;
+                    speechSynthesis.cancel();
+                    setTimeout(resetUI, 1000);
+                }, 10000);
 
-                clearTimeout(_hablarTimeout);
-                _hablarTimeout = setTimeout(() => {
-                    if (hablando) {
-                        hablando = false;
-                        speechSynthesis.cancel();
-                        setTimeout(resetUI, 1000);
+                const resumeInterval = setInterval(() => {
+                    if (!speechSynthesis.speaking) {
+                        clearInterval(resumeInterval);
+                    } else {
+                        speechSynthesis.pause();
+                        speechSynthesis.resume();
                     }
-                }, 8000);
+                }, 5000);
 
                 utter.onend = () => {
-                    clearTimeout(_hablarTimeout);
+                    clearInterval(resumeInterval);
+                    clearTimeout(safetyTimer);
                     hablando = false;
-                    setTimeout(resetUI, 1500);
+                    setTimeout(resetUI, 2000);
                 };
                 utter.onerror = () => {
-                    clearTimeout(_hablarTimeout);
+                    clearInterval(resumeInterval);
+                    clearTimeout(safetyTimer);
                     hablando = false;
                     setTimeout(resetUI, 1500);
                 };
