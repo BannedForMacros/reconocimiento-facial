@@ -6,11 +6,27 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "cambiar-en-produccion-clave-super-secreta"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
-    FACE_THRESHOLD: float = 0.60
-    LIVENESS_THRESHOLD: float = 0.3
-    MAX_EMBEDDINGS: int = 8
     EMBEDDING_DIM: int = 512
-    
+
+    # === Reconocimiento Facial ===
+    MATCH_THRESHOLD: float = 0.45
+    DUPLICATE_THRESHOLD: float = 0.50
+    DETECTION_CONFIDENCE: float = 0.80
+    MIN_FACE_SIZE: int = 80
+    ENRICHMENT_THRESHOLD: float = 0.30  # si distancia > esto, enriquecer embedding
+    FRAMES_FOR_REGISTRATION: int = 15
+    MIN_VALID_FRAMES: int = 10
+
+    # === Liveness (Anti-Spoofing) ===
+    LIVENESS_THRESHOLD: float = 0.45
+
+    # === Sistema de Votacion ===
+    VOTING_WINDOW: int = 5
+    VOTING_THRESHOLD: int = 3
+
+    # === Cooldown ===
+    ATTENDANCE_COOLDOWN_MINUTES: int = 30
+
     class Config:
         env_file = ".env"
 
@@ -18,4 +34,4 @@ class Settings(BaseSettings):
 def get_settings():
     return Settings()
 
-settings = get_settings()  # ← AGREGAR ESTA LÍNEA
+settings = get_settings()

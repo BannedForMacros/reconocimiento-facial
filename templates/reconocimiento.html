@@ -30,15 +30,8 @@
             border-top: 6px solid var(--primary-blue);
             text-align: center;
         }
-        h1 {
-            color: var(--primary-blue);
-            margin-bottom: 10px;
-        }
-        .subtitle {
-            color: #666;
-            margin-bottom: 30px;
-            font-size: 14px;
-        }
+        h1 { color: var(--primary-blue); margin-bottom: 10px; }
+        .subtitle { color: #666; margin-bottom: 30px; font-size: 14px; }
         .video-container {
             position: relative;
             margin-bottom: 20px;
@@ -47,11 +40,7 @@
             background: #000;
             border: 3px solid var(--primary-blue);
         }
-        #video {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
+        #video { width: 100%; height: auto; display: block; }
         canvas { display: none; }
         .status {
             padding: 20px;
@@ -64,24 +53,12 @@
             align-items: center;
             justify-content: center;
         }
-        .status.waiting {
-            background: #e3f2fd;
-            color: #1976d2;
-        }
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            animation: pulse 0.5s;
-        }
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        .status.spoofing {
-            background: #fff3cd;
-            color: #856404;
-            border: 2px solid #ffc107;
-        }
+        .status.waiting { background: #e3f2fd; color: #1976d2; }
+        .status.success { background: #d4edda; color: #155724; animation: pulse 0.5s; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.spoofing { background: #fff3cd; color: #856404; border: 2px solid #ffc107; }
+        .status.scanning { background: #d1ecf1; color: #0c5460; }
+        .status.cooldown { background: #e2e3e5; color: #383d41; }
         @keyframes pulse {
             0%, 100% { transform: scale(1); }
             50% { transform: scale(1.05); }
@@ -93,13 +70,8 @@
             margin-top: 20px;
             text-align: left;
         }
-        .info-box p {
-            margin: 5px 0;
-            color: #666;
-        }
-        .info-box strong {
-            color: var(--primary-blue);
-        }
+        .info-box p { margin: 5px 0; color: #666; }
+        .info-box strong { color: var(--primary-blue); }
         .btn-link {
             display: inline-block;
             margin-top: 20px;
@@ -109,120 +81,262 @@
             text-decoration: none;
             border-radius: 6px;
         }
-        .btn-link:hover {
-            background: #5a6268;
+        .btn-link:hover { background: #5a6268; }
+
+        /* --- Boton flotante para activar sonido --- */
+        .sound-btn {
+            position: fixed;
+            bottom: 25px;
+            right: 25px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--primary-blue);
+            color: white;
+            border: none;
+            font-size: 1.4rem;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 74, 143, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            transition: all 0.3s;
+            animation: soundPulse 2s infinite;
+        }
+        .sound-btn:hover { transform: scale(1.1); }
+        .sound-btn.active { background: #28a745; animation: none; }
+        .sound-btn .tooltip {
+            position: absolute;
+            right: 65px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            pointer-events: none;
+        }
+        .sound-btn.active .tooltip { display: none; }
+        @keyframes soundPulse {
+            0%, 100% { box-shadow: 0 4px 15px rgba(0, 74, 143, 0.4); }
+            50% { box-shadow: 0 4px 25px rgba(0, 74, 143, 0.7); }
         }
     </style>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div class="container">
-        <h1>🎯 Sistema de Reconocimiento Facial</h1>
-        <p class="subtitle">Coloca tu rostro frente a la cámara</p>
-        
+        <h1>Sistema de Reconocimiento Facial</h1>
+        <p class="subtitle">Coloca tu rostro frente a la camara</p>
+
         <div class="video-container">
             <video id="video" autoplay></video>
             <canvas id="canvas"></canvas>
         </div>
-        
+
         <div id="status" class="status waiting">
-            Esperando detección...
+            Esperando deteccion...
         </div>
-        
+
         <div id="infoBox" class="info-box" style="display: none;">
             <p><strong>DNI:</strong> <span id="infoDni"></span></p>
             <p><strong>Nombre:</strong> <span id="infoNombre"></span></p>
             <p><strong>Confianza:</strong> <span id="infoConfianza"></span>%</p>
             <p><strong>Liveness:</strong> <span id="infoLiveness"></span></p>
+            <p><strong>Comida:</strong> <span id="infoComida"></span></p>
         </div>
-        
+
         <a href="/registro" class="btn-link">Registrar nuevo usuario</a>
     </div>
+
+    <!-- Boton flotante activar sonido -->
+    <button id="soundBtn" class="sound-btn" onclick="activarSonido()">
+        <span class="tooltip">Activar sonido</span>
+        <i id="soundIcon" class="fas fa-volume-mute"></i>
+    </button>
 
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const status = document.getElementById('status');
+        const statusEl = document.getElementById('status');
         const infoBox = document.getElementById('infoBox');
-        
-        let isProcessing = false;
 
-        // Iniciar webcam
+        let isProcessing = false;
+        let hablando = false;
+        let vozDesbloqueada = false;
+
+        function activarSonido() {
+            if (vozDesbloqueada) return;
+            try {
+                const u = new SpeechSynthesisUtterance('Sistema de voz activado');
+                u.lang = 'es-ES';
+                u.volume = 0.5;
+                speechSynthesis.speak(u);
+                vozDesbloqueada = true;
+                document.getElementById('soundBtn').classList.add('active');
+                document.getElementById('soundIcon').className = 'fas fa-volume-up';
+            } catch (e) {}
+        }
+
+        function _desbloquearSilencioso() {
+            if (vozDesbloqueada) return;
+            vozDesbloqueada = true;
+            try {
+                const u = new SpeechSynthesisUtterance('');
+                u.volume = 0;
+                speechSynthesis.speak(u);
+                document.getElementById('soundBtn').classList.add('active');
+                document.getElementById('soundIcon').className = 'fas fa-volume-up';
+            } catch (e) {}
+        }
+        document.addEventListener('click', _desbloquearSilencioso, { once: true });
+        document.addEventListener('touchstart', _desbloquearSilencioso, { once: true });
+
+        // Camara automatica
         navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
             .then(stream => {
                 video.srcObject = stream;
-                // Reconocer cada 2 segundos
-                setInterval(reconocer, 2000);
+                setInterval(reconocer, 1500);
             })
-            .catch(err => {
-                status.textContent = '❌ No se pudo acceder a la cámara';
-                status.className = 'status error';
+            .catch(() => {
+                statusEl.textContent = 'No se pudo acceder a la camara';
+                statusEl.className = 'status error';
             });
 
         async function reconocer() {
-            if (isProcessing) return;
+            if (isProcessing || hablando) return;
             isProcessing = true;
-            
+
             try {
-                // Capturar frame
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0);
-                const fotoBase64 = canvas.toDataURL('image/jpeg');
-                
-                // Convertir a blob
-                const blob = await (await fetch(fotoBase64)).blob();
+
+                const blob = await (await fetch(canvas.toDataURL('image/jpeg', 0.85))).blob();
                 const formData = new FormData();
                 formData.append('foto', blob, 'frame.jpg');
-                
-                // Enviar al servidor
-                const response = await fetch('/api/reconocer', {
-                    method: 'POST',
-                    body: formData
-                });
-                
+
+                const response = await fetch('/api/reconocer', { method: 'POST', body: formData });
                 const data = await response.json();
-                
-                if (data.success) {
-                    // Match exitoso
-                    status.textContent = `✅ ${data.message}`;
-                    status.className = 'status success';
-                    
-                    // Mostrar info
-                    document.getElementById('infoDni').textContent = data.comensal.dni;
-                    document.getElementById('infoNombre').textContent = 
-                        `${data.comensal.nombre} ${data.comensal.apellido}`;
-                    document.getElementById('infoConfianza').textContent = data.confianza;
-                    document.getElementById('infoLiveness').textContent = data.liveness_score;
-                    infoBox.style.display = 'block';
-                    
-                    // Volver a esperar después de 5 segundos
-                    setTimeout(() => {
-                        status.textContent = 'Esperando detección...';
-                        status.className = 'status waiting';
+
+                switch (data.status) {
+                    case 'MATCH_CONFIRMED':
+                        statusEl.textContent = data.message;
+                        statusEl.className = 'status success';
+                        document.getElementById('infoDni').textContent = data.comensal.dni;
+                        document.getElementById('infoNombre').textContent =
+                            `${data.comensal.nombre} ${data.comensal.apellido}`;
+                        document.getElementById('infoConfianza').textContent = data.confianza;
+                        document.getElementById('infoLiveness').textContent = data.liveness_score;
+                        document.getElementById('infoComida').textContent = data.comida;
+                        infoBox.style.display = 'block';
+                        hablar(`Bienvenido, ${data.comensal.nombre} ${data.comensal.apellido}`);
+                        break;
+
+                    case 'SCANNING':
+                        statusEl.textContent = data.message;
+                        statusEl.className = 'status scanning';
+                        if (data.partial) {
+                            document.getElementById('infoNombre').textContent = data.partial.nombre;
+                            document.getElementById('infoConfianza').textContent = data.partial.confianza;
+                            infoBox.style.display = 'block';
+                        }
+                        break;
+
+                    case 'LIVENESS_FAILED':
+                        statusEl.textContent = 'Intento de suplantacion detectado';
+                        statusEl.className = 'status spoofing';
                         infoBox.style.display = 'none';
-                    }, 5000);
-                    
-                } else {
-                    // No reconocido o spoofing
-                    if (data.message.includes('spoofing')) {
-                        status.textContent = data.message;
-                        status.className = 'status spoofing';
-                    } else {
-                        status.textContent = data.message;
-                        status.className = 'status error';
-                    }
-                    
-                    setTimeout(() => {
-                        status.textContent = 'Esperando detección...';
-                        status.className = 'status waiting';
-                    }, 3000);
+                        hablar('Intento de suplantacion detectado');
+                        break;
+
+                    case 'COOLDOWN':
+                        statusEl.textContent = data.message;
+                        statusEl.className = 'status cooldown';
+                        infoBox.style.display = 'none';
+                        hablar('Ya registraste tu asistencia');
+                        break;
+
+                    case 'REJECTED':
+                        statusEl.textContent = data.message;
+                        statusEl.className = 'status error';
+                        infoBox.style.display = 'none';
+                        setTimeout(resetUI, 3000);
+                        break;
+
+                    case 'NO_MATCH':
+                        statusEl.textContent = 'Rostro no reconocido';
+                        statusEl.className = 'status error';
+                        infoBox.style.display = 'none';
+                        setTimeout(resetUI, 2000);
+                        break;
+
+                    case 'NO_FACE':
+                    case 'LOW_QUALITY':
+                    case 'TOO_FAR':
+                        break;
+
+                    default:
+                        break;
                 }
-                
+
             } catch (error) {
                 console.error('Error:', error);
             } finally {
                 isProcessing = false;
+            }
+        }
+
+        function resetUI() {
+            statusEl.textContent = 'Esperando deteccion...';
+            statusEl.className = 'status waiting';
+            infoBox.style.display = 'none';
+        }
+
+        // Voz: bloquea escaneo mientras habla, luego resetea UI
+        let _hablarTimeout = null;
+
+        function hablar(texto) {
+            if (!('speechSynthesis' in window) || !vozDesbloqueada) {
+                setTimeout(resetUI, 4000);
+                return;
+            }
+
+            try {
+                speechSynthesis.cancel();
+                const utter = new SpeechSynthesisUtterance(texto);
+                utter.lang = 'es-ES';
+                utter.rate = 1.0;
+                utter.volume = 0.9;
+
+                hablando = true;
+
+                clearTimeout(_hablarTimeout);
+                _hablarTimeout = setTimeout(() => {
+                    if (hablando) {
+                        hablando = false;
+                        speechSynthesis.cancel();
+                        setTimeout(resetUI, 1000);
+                    }
+                }, 8000);
+
+                utter.onend = () => {
+                    clearTimeout(_hablarTimeout);
+                    hablando = false;
+                    setTimeout(resetUI, 1500);
+                };
+                utter.onerror = () => {
+                    clearTimeout(_hablarTimeout);
+                    hablando = false;
+                    setTimeout(resetUI, 1500);
+                };
+
+                speechSynthesis.speak(utter);
+            } catch (e) {
+                hablando = false;
+                setTimeout(resetUI, 2000);
             }
         }
     </script>

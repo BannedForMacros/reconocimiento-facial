@@ -41,8 +41,8 @@ class ValidacionService:
                 "hora_actual": ahora.time().strftime("%H:%M")
             }
         
-        # 3. Validar confianza mínima
-        if confianza < 80:
+        # 3. Validar confianza mínima (MATCH_THRESHOLD=0.45 → confianza mínima ~55%)
+        if confianza < 50:
             return {
                 "valido": False,
                 "motivo": "baja_confianza",

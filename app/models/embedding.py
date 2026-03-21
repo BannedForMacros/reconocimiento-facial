@@ -16,5 +16,6 @@ class Embedding(Base):
     iluminacion = Column(String(20))
     angulo_estimado = Column(Float)
     es_principal = Column(Boolean, default=False)
+    es_promedio = Column(Boolean, default=False)
     usado_en_matches = Column(Integer, default=0)
     fecha_creacion = Column(TIMESTAMP, server_default=func.now())

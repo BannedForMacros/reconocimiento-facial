@@ -2,64 +2,96 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.models.embedding import Embedding
 from app.models.comensal import Comensal
-from app.core.config import settings
 import numpy as np
 
+
 class EmbeddingService:
-    
+
     async def save_embedding(
-        self, 
-        db: AsyncSession, 
-        comensal_id: int, 
+        self,
+        db: AsyncSession,
+        comensal_id: int,
         embedding: np.ndarray,
         calidad: float,
         fuente: str,
-        es_principal: bool = False
+        es_principal: bool = False,
+        es_promedio: bool = False,
     ):
-        """Guarda un embedding en la BD"""
+        """Guarda un embedding individual en la BD."""
         emb = Embedding(
             comensal_id=comensal_id,
             embedding=embedding.tolist(),
             calidad=calidad,
             fuente=fuente,
-            es_principal=es_principal
+            es_principal=es_principal,
+            es_promedio=es_promedio,
         )
         db.add(emb)
-        await db.commit()
         return emb
-    
-    async def find_match(
-        self, 
-        db: AsyncSession, 
-        embedding: np.ndarray
+
+    async def save_batch(
+        self,
+        db: AsyncSession,
+        comensal_id: int,
+        embeddings: list,
+        avg_embedding: np.ndarray,
+        fuente: str,
     ):
-        """Busca el embedding más cercano usando pgvector"""
-        # Búsqueda vectorial con distancia coseno
-        query = select(
-            Embedding.comensal_id,
-            Embedding.id,
-            Embedding.embedding.cosine_distance(embedding.tolist()).label("distance")
-        ).order_by("distance").limit(1)
-        
-        result = await db.execute(query)
-        match = result.first()
-        
-        if match and match.distance < settings.FACE_THRESHOLD:
-            # Obtener datos del comensal
-            comensal = await db.get(Comensal, match.comensal_id)
-            return {
-                "comensal": comensal,
-                "distance": match.distance,
-                "embedding_id": match.id
-            }
-        
-        return None
-    
-    async def count_embeddings(self, db: AsyncSession, comensal_id: int) -> int:
-        """Cuenta embeddings de un comensal"""
+        """
+        Guarda el embedding promedio (es_promedio=True) y los individuales.
+        El promedio se usa para matching; los individuales se conservan
+        para futura mejora del modelo.
+        """
+        # Embedding promedio (principal)
+        avg_emb = Embedding(
+            comensal_id=comensal_id,
+            embedding=avg_embedding.tolist(),
+            calidad=1.0,
+            fuente=fuente,
+            es_principal=True,
+            es_promedio=True,
+        )
+        db.add(avg_emb)
+
+        # Embeddings individuales
+        for emb_array in embeddings:
+            individual = Embedding(
+                comensal_id=comensal_id,
+                embedding=emb_array.tolist(),
+                calidad=0.8,
+                fuente=fuente,
+                es_principal=False,
+                es_promedio=False,
+            )
+            db.add(individual)
+
+    async def update_average_embedding(
+        self,
+        db: AsyncSession,
+        comensal_id: int,
+        new_avg_embedding: np.ndarray,
+    ):
+        """Actualiza el embedding promedio en la BD (para auto-enriquecimiento)."""
         result = await db.execute(
-            select(func.count(Embedding.id)).where(Embedding.comensal_id == comensal_id)
+            select(Embedding).where(
+                Embedding.comensal_id == comensal_id,
+                Embedding.es_promedio == True,
+            )
+        )
+        emb_record = result.scalar_one_or_none()
+
+        if emb_record:
+            emb_record.embedding = new_avg_embedding.tolist()
+            await db.commit()
+
+    async def count_embeddings(self, db: AsyncSession, comensal_id: int) -> int:
+        """Cuenta embeddings de un comensal."""
+        result = await db.execute(
+            select(func.count(Embedding.id)).where(
+                Embedding.comensal_id == comensal_id
+            )
         )
         return result.scalar()
+
 
 embedding_service = EmbeddingService()
