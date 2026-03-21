@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro - Sistema Comedor UNPRG</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-blue: #004a8f;
+            --primary-dark: #003366;
+            --secondary-yellow: #ffd700;
+            --background-light: #f4f7fa;
+            --text-gray: #555;
+            --danger-red: #dc3545;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--background-light);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+            max-width: 550px;
+            width: 100%;
+            padding: 40px;
+            border-top: 8px solid var(--primary-blue);
+            position: relative;
+        }
+
+        h1 {
+            color: var(--primary-blue);
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 1.8rem;
+        }
+
+        /* --- ESTILOS DEL SWITCH (TOGGLE) --- */
+        .toggle-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 25px;
+            background: #f0f2f5;
+            padding: 10px;
+            border-radius: 50px;
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .toggle-label {
+            font-weight: 600;
+            font-size: 14px;
+            color: #aaa;
+            margin: 0 15px;
+            transition: color 0.3s;
+            cursor: pointer;
+        }
+
+        .toggle-label.active {
+            color: var(--primary-blue);
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+
+        .switch input { 
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        input:checked + .slider {
+            background-color: var(--primary-blue);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(24px);
+        }
+
+        /* --- CONTENEDORES DE MEDIA --- */
+        .media-area {
+            min-height: 320px; /* Evita saltos de altura */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* Webcam Styles */
+        .video-container {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            width: 100%;
+            aspect-ratio: 4/3;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Efecto espejo */
+        }
+        
+        canvas { display: none; }
+
+        /* Upload Styles */
+        .upload-container {
+            display: none; /* Oculto por defecto */
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        .upload-dropzone {
+            border: 2px dashed #cbd5e0;
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #fafbfc;
+        }
+
+        .upload-dropzone:hover {
+            border-color: var(--primary-blue);
+            background: #f0f7ff;
+        }
+
+        .upload-icon {
+            font-size: 40px;
+            color: var(--primary-blue);
+            margin-bottom: 10px;
+        }
+
+        .upload-text {
+            color: var(--text-gray);
+            font-size: 14px;
+        }
+
+        /* Preview con Botón de Eliminar */
+        .preview-container {
+            display: none;
+            position: relative;
+            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        #imgPreview {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .btn-remove {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(220, 53, 69, 0.9);
+            color: white;
+            border: none;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .btn-remove:hover {
+            background: var(--danger-red);
+            transform: scale(1.1);
+        }
+
+        /* --- FORMULARIO --- */
+        .form-section {
+            margin-top: 25px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+            position: relative;
+        }
+
+        .form-group i {
+            position: absolute;
+            left: 15px;
+            top: 42px; /* Ajuste basado en el label */
+            color: var(--primary-blue);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            color: var(--primary-blue);
+            font-weight: 600;
+            font-size: 0.9rem;
+        }
+
+        input[type="text"], input[type="email"] {
+            width: 100%;
+            padding: 12px 12px 12px 40px; /* Padding izquierdo para el icono */
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            background: #fafafa;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(0, 74, 143, 0.1);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-submit:hover {
+            background: var(--secondary-yellow);
+            color: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        /* --- ALERTAS --- */
+        .alert {
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            display: none;
+            text-align: center;
+            font-size: 14px;
+        }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1><i class="fas fa-utensils"></i> Registro Comedor</h1>
+        
+        <div id="alert" class="alert"></div>
+
+        <div class="toggle-wrapper">
+            <span class="toggle-label active" id="lblWebcam" onclick="setMode(false)"><i class="fas fa-camera"></i> Webcam</span>
+            <label class="switch">
+                <input type="checkbox" id="modeSwitch">
+                <span class="slider round"></span>
+            </label>
+            <span class="toggle-label" id="lblUpload" onclick="setMode(true)"><i class="fas fa-image"></i> Subir Foto</span>
+        </div>
+
+        <div class="media-area">
+            <div id="webcamSection" class="video-container">
+                <video id="video" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+            </div>
+
+            <div id="uploadSection" class="upload-container">
+                <div id="dropzone" class="upload-dropzone" onclick="document.getElementById('fotoFile').click()">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <h3>Sube tu foto</h3>
+                    <p class="upload-text">Haz clic aquí para seleccionar</p>
+                    <input type="file" id="fotoFile" accept="image/*" style="display: none;">
+                </div>
+
+                <div id="previewBox" class="preview-container">
+                    <img id="imgPreview" src="" alt="Vista previa">
+                    <button type="button" class="btn-remove" onclick="removePhoto()" title="Eliminar foto">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <form id="registroForm" class="form-section">
+            <div class="form-group">
+                <label for="dni">DNI</label>
+                <i class="fas fa-id-card"></i>
+                <input type="text" id="dni" maxlength="8" placeholder="Ingresa tu DNI" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="nombre">Nombre</label>
+                <i class="fas fa-user"></i>
+                <input type="text" id="nombre" placeholder="Tu nombre" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="apellido">Apellido</label>
+                <i class="fas fa-user-tag"></i>
+                <input type="text" id="apellido" placeholder="Tu apellido" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email (opcional)</label>
+                <i class="fas fa-envelope"></i>
+                <input type="email" id="email" placeholder="correo@ejemplo.com">
+            </div>
+            
+            <button type="submit" class="btn-submit">
+                <i class="fas fa-check-circle"></i> Registrar Usuario
+            </button>
+        </form>
+    </div>
+
+    <script>
+        // Elementos del DOM
+        const modeSwitch = document.getElementById('modeSwitch');
+        const webcamSection = document.getElementById('webcamSection');
+        const uploadSection = document.getElementById('uploadSection');
+        const lblWebcam = document.getElementById('lblWebcam');
+        const lblUpload = document.getElementById('lblUpload');
+        
+        // Elementos de Webcam
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        
+        // Elementos de Upload
+        const fotoFile = document.getElementById('fotoFile');
+        const dropzone = document.getElementById('dropzone');
+        const previewBox = document.getElementById('previewBox');
+        const imgPreview = document.getElementById('imgPreview');
+        const alertBox = document.getElementById('alert');
+
+        let streamActivo = null;
+        let isUploadMode = false;
+
+        // INICIALIZACIÓN
+        startWebcam(); // Iniciar webcam por defecto
+
+        // LISTENER DEL SWITCH
+        modeSwitch.addEventListener('change', function() {
+            setMode(this.checked);
+        });
+
+        function setMode(uploadMode) {
+            isUploadMode = uploadMode;
+            modeSwitch.checked = uploadMode; // Sincronizar checkbox si se llamó desde el texto
+
+            if (isUploadMode) {
+                // Modo Subir Foto
+                webcamSection.style.display = 'none';
+                uploadSection.style.display = 'block';
+                lblWebcam.classList.remove('active');
+                lblUpload.classList.add('active');
+                stopWebcam(); // Apagar cámara para ahorrar recursos
+            } else {
+                // Modo Webcam
+                webcamSection.style.display = 'block';
+                uploadSection.style.display = 'none';
+                lblWebcam.classList.add('active');
+                lblUpload.classList.remove('active');
+                startWebcam(); // Encender cámara
+            }
+        }
+
+        // --- LÓGICA DE WEBCAM ---
+        function startWebcam() {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
+                .then(function(stream) {
+                    streamActivo = stream;
+                    video.srcObject = stream;
+                    video.play();
+                })
+                .catch(function(err) {
+                    showAlert('No se pudo acceder a la cámara. Verifique los permisos.', 'error');
+                    console.error("Error webcam:", err);
+                });
+            }
+        }
+
+        function stopWebcam() {
+            if (streamActivo) {
+                streamActivo.getTracks().forEach(track => track.stop());
+                streamActivo = null;
+            }
+        }
+
+        // --- LÓGICA DE UPLOAD ---
+        fotoFile.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                showPreview(file);
+            }
+        });
+
+        function showPreview(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                imgPreview.src = e.target.result;
+                dropzone.style.display = 'none';
+                previewBox.style.display = 'block';
+                previewBox.style.animation = 'fadeIn 0.3s';
+            }
+            reader.readAsDataURL(file);
+        }
+
+        // Función para eliminar la foto seleccionada
+        function removePhoto() {
+            fotoFile.value = ''; // Limpiar input
+            imgPreview.src = '';
+            previewBox.style.display = 'none';
+            dropzone.style.display = 'block'; // Mostrar dropzone de nuevo
+            dropzone.style.animation = 'fadeIn 0.3s';
+        }
+
+        // --- ENVÍO DEL FORMULARIO ---
+        document.getElementById('registroForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const dni = document.getElementById('dni').value;
+            const nombre = document.getElementById('nombre').value;
+            const apellido = document.getElementById('apellido').value;
+            const email = document.getElementById('email').value;
+            
+            let fotoBase64 = null;
+
+            // Obtener imagen según el modo activo
+            if (isUploadMode) {
+                // Validar si subió archivo
+                if (!fotoFile.files[0]) {
+                    showAlert('Por favor sube una foto antes de continuar.', 'error');
+                    return;
+                }
+                // Convertir archivo a Base64
+                fotoBase64 = await toBase64(fotoFile.files[0]);
+            } else {
+                // Capturar desde Webcam
+                if (!streamActivo) {
+                    showAlert('La cámara no está activa.', 'error');
+                    return;
+                }
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                // Dibujar con efecto espejo para que coincida con lo que ve el usuario
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+                ctx.drawImage(video, 0, 0);
+                fotoBase64 = canvas.toDataURL('image/jpeg', 0.95);
+            }
+
+            // Preparar FormData
+            const formData = new FormData();
+            formData.append('dni', dni);
+            formData.append('nombre', nombre);
+            formData.append('apellido', apellido);
+            formData.append('email', email);
+            formData.append('foto_base64', fotoBase64);
+            formData.append('metodo', isUploadMode ? 'archivo' : 'webcam');
+
+            // Simulación de envío (Reemplaza la URL con tu API real)
+            try {
+                // Cambiar texto botón para feedback visual
+                const btn = document.querySelector('.btn-submit');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+                btn.disabled = true;
+
+                const response = await fetch('/api/registrar_webcam', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showAlert('✅ Usuario registrado correctamente', 'success');
+                    document.getElementById('registroForm').reset();
+                    removePhoto(); // Resetear upload UI
+                    if(!isUploadMode) startWebcam(); // Asegurar webcam activa
+                } else {
+                    showAlert('❌ ' + (data.message || 'Error en el registro'), 'error');
+                }
+            } catch (error) {
+                console.error(error);
+                // NOTA: Esto es para prueba si no tienes backend corriendo, quita esto en prod
+                showAlert('⚠️ Error de conexión (Check consola)', 'error'); 
+            } finally {
+                // Restaurar botón
+                const btn = document.querySelector('.btn-submit');
+                btn.innerHTML = '<i class="fas fa-check-circle"></i> Registrar Usuario';
+                btn.disabled = false;
+            }
+        });
+
+        // Utilidad: Convertir File a Base64
+        function toBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        function showAlert(msg, type) {
+            alertBox.textContent = msg;
+            alertBox.className = `alert alert-${type}`;
+            alertBox.style.display = 'block';
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
