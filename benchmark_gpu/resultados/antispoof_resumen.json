@@ -1,0 +1,64 @@
+{
+  "umbral_heuristica": 0.37,
+  "umbral_modelo": 0.5,
+  "cuadros": 810,
+  "metodos": {
+    "Heuristica actual": {
+      "APCER_cuadro": 85.5,
+      "BPCER_cuadro": 4.2,
+      "APCER_video": 88.3,
+      "BPCER_video": 0.0
+    },
+    "MiniFASNet": {
+      "APCER_cuadro": 85.4,
+      "BPCER_cuadro": 4.2,
+      "APCER_video": 88.3,
+      "BPCER_video": 0.0
+    },
+    "Ambos (AND)": {
+      "APCER_cuadro": 76.6,
+      "BPCER_cuadro": 7.6,
+      "APCER_video": 81.7,
+      "BPCER_video": 0.0
+    }
+  },
+  "AUC_heuristica": 0.57,
+  "AUC_modelo": 0.688,
+  "barrido_modelo": [
+    {
+      "umbral": 0.3,
+      "APCER": 89.9,
+      "BPCER": 1.7
+    },
+    {
+      "umbral": 0.4,
+      "APCER": 87.9,
+      "BPCER": 2.5
+    },
+    {
+      "umbral": 0.5,
+      "APCER": 85.4,
+      "BPCER": 4.2
+    },
+    {
+      "umbral": 0.6,
+      "APCER": 81.9,
+      "BPCER": 5.9
+    },
+    {
+      "umbral": 0.7,
+      "APCER": 77.3,
+      "BPCER": 8.5
+    },
+    {
+      "umbral": 0.8,
+      "APCER": 72.4,
+      "BPCER": 15.3
+    },
+    {
+      "umbral": 0.9,
+      "APCER": 63.0,
+      "BPCER": 17.8
+    }
+  ]
+}

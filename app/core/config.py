@@ -18,7 +18,21 @@ class Settings(BaseSettings):
     MIN_VALID_FRAMES: int = 10
 
     # === Liveness (Anti-Spoofing) ===
-    LIVENESS_THRESHOLD: float = 0.45
+    LIVENESS_THRESHOLD: float = 0.35
+    # Modelo entrenado MiniFASNet (app/services/antispoof_service.py)
+    ANTISPOOF_ENABLED: bool = True   # con camara real: 100 % reales aceptados (benchmark_gpu/RESULTADOS.md)
+    ANTISPOOF_THRESHOLD: float = 0.5   # prob. minima de "real"
+    # Prueba de vida ACTIVA: girar la cabeza al lado pedido (app/services/reto_service.py)
+    RETO_ENABLED: bool = True
+    RETO_GIRO_MIN: float = 0.25        # giro minimo hacia el lado pedido
+    RETO_FRONTAL_MAX: float = 0.12     # |giro| para considerar "de frente" otra vez
+    RETO_SIGNO_IZQUIERDA: int = 1      # signo del giro cuando la persona gira a SU izquierda
+    RETO_TIMEOUT_S: float = 10.0       # tiempo para cumplir el reto antes de cambiarlo
+    RETO_VALIDEZ_S: float = 8.0        # tiempo que vale un reto cumplido para terminar la votacion
+
+    # === GPU (requiere onnxruntime-gpu; sin el, todo corre en CPU) ===
+    USE_GPU: bool = True
+    GPU_MEM_LIMIT_MB: int = 1024       # tope de la arena CUDA (la GPU se comparte)
 
     # === Sistema de Votacion ===
     VOTING_WINDOW: int = 5

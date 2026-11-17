@@ -1,0 +1,93 @@
+{
+  "fecha": "2026-10-05 00:04",
+  "cpu": "Intel i7-9700 (8 nucleos)",
+  "gpu": "RTX 5060 Ti 16 GB",
+  "onnxruntime": "1.23.2",
+  "iteraciones": 100,
+  "vram_mb": {
+    "GPU 5 modelos (actual)": 876.0,
+    "GPU 2 modelos (det+rec)": 582.0
+  },
+  "filas": [
+    {
+      "ms_media": 501.52,
+      "ms_p50": 500.0,
+      "ms_p95": 591.83,
+      "fps": 2.0,
+      "caras": 1,
+      "sim_vs_cpu": 1.0,
+      "config": "CPU 5 modelos (actual)",
+      "imagen": "webcam_640x480_1cara"
+    },
+    {
+      "ms_media": 2123.43,
+      "ms_p50": 2148.71,
+      "ms_p95": 2374.12,
+      "fps": 0.5,
+      "caras": 6,
+      "sim_vs_cpu": 1.0,
+      "config": "CPU 5 modelos (actual)",
+      "imagen": "grupo_t1"
+    },
+    {
+      "ms_media": 281.64,
+      "ms_p50": 275.59,
+      "ms_p95": 361.1,
+      "fps": 3.6,
+      "caras": 1,
+      "sim_vs_cpu": 1.0,
+      "config": "CPU 2 modelos (det+rec)",
+      "imagen": "webcam_640x480_1cara"
+    },
+    {
+      "ms_media": 526.04,
+      "ms_p50": 510.66,
+      "ms_p95": 637.28,
+      "fps": 1.9,
+      "caras": 6,
+      "sim_vs_cpu": 1.0,
+      "config": "CPU 2 modelos (det+rec)",
+      "imagen": "grupo_t1"
+    },
+    {
+      "ms_media": 26.3,
+      "ms_p50": 26.0,
+      "ms_p95": 28.91,
+      "fps": 38.0,
+      "caras": 1,
+      "sim_vs_cpu": 0.99999,
+      "config": "GPU 5 modelos (actual)",
+      "imagen": "webcam_640x480_1cara"
+    },
+    {
+      "ms_media": 97.1,
+      "ms_p50": 96.38,
+      "ms_p95": 102.54,
+      "fps": 10.3,
+      "caras": 6,
+      "sim_vs_cpu": 0.99998,
+      "config": "GPU 5 modelos (actual)",
+      "imagen": "grupo_t1"
+    },
+    {
+      "ms_media": 17.08,
+      "ms_p50": 16.84,
+      "ms_p95": 17.7,
+      "fps": 58.5,
+      "caras": 1,
+      "sim_vs_cpu": 0.99999,
+      "config": "GPU 2 modelos (det+rec)",
+      "imagen": "webcam_640x480_1cara"
+    },
+    {
+      "ms_media": 42.4,
+      "ms_p50": 41.55,
+      "ms_p95": 47.29,
+      "fps": 23.6,
+      "caras": 6,
+      "sim_vs_cpu": 0.99998,
+      "config": "GPU 2 modelos (det+rec)",
+      "imagen": "grupo_t1"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+# Secretos y datos personales
+.env
+base_datos/
+benchmark_gpu/resultados/**/*.jpg
+
+# Entornos y cache de Python
+venv/
+venv_gpu/
+__pycache__/
+*.pyc
+
+# Herramientas del editor
+.sfdx/

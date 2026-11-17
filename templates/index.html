@@ -380,7 +380,7 @@
         })
         .then(stream => {
             video.srcObject = stream;
-            setInterval(reconocer, 1500);
+            setInterval(reconocer, 400);  // 400 ms: el reto de giro dura ~1 s
         })
         .catch(() => {
             updateStatus('error', 'fa-video-slash', 'Error de Camara', 'No se pudo acceder al dispositivo.');

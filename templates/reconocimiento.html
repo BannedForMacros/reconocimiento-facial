@@ -198,7 +198,7 @@
         navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } })
             .then(stream => {
                 video.srcObject = stream;
-                setInterval(reconocer, 1500);
+                setInterval(reconocer, 400);  // 400 ms: el reto de giro dura ~1 s
             })
             .catch(() => {
                 statusEl.textContent = 'No se pudo acceder a la camara';
@@ -229,7 +229,8 @@
                         document.getElementById('infoNombre').textContent =
                             `${data.comensal.nombre} ${data.comensal.apellido}`;
                         document.getElementById('infoConfianza').textContent = data.confianza;
-                        document.getElementById('infoLiveness').textContent = data.liveness_score;
+                        document.getElementById('infoLiveness').textContent =
+                            (data.liveness_score != null) ? (data.liveness_score * 100).toFixed(1) + '%' : '--';
                         document.getElementById('infoComida').textContent = data.comida;
                         infoBox.style.display = 'block';
                         hablar(`Bienvenido, ${data.comensal.nombre} ${data.comensal.apellido}`);
@@ -241,12 +242,14 @@
                         if (data.partial) {
                             document.getElementById('infoNombre').textContent = data.partial.nombre;
                             document.getElementById('infoConfianza').textContent = data.partial.confianza;
+                            document.getElementById('infoLiveness').textContent =
+                                (data.liveness_score != null) ? (data.liveness_score * 100).toFixed(1) + '%' : '--';
                             infoBox.style.display = 'block';
                         }
                         break;
 
                     case 'LIVENESS_FAILED':
-                        statusEl.textContent = 'Intento de suplantacion detectado';
+                        statusEl.textContent = `Intento de suplantacion detectado (liveness: ${data.liveness_score})`;
                         statusEl.className = 'status spoofing';
                         infoBox.style.display = 'none';
                         hablar('Intento de suplantacion detectado');
@@ -267,7 +270,7 @@
                         break;
 
                     case 'NO_MATCH':
-                        statusEl.textContent = 'Rostro no reconocido';
+                        statusEl.textContent = `Rostro no reconocido (liveness: ${data.liveness_score ?? '?'})`;
                         statusEl.className = 'status error';
                         infoBox.style.display = 'none';
                         setTimeout(resetUI, 2000);

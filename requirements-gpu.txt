@@ -1,0 +1,5 @@
+# Igual que requirements.txt pero con inferencia en GPU NVIDIA (CUDA 12, cuDNN 9).
+# Instalar en un venv nuevo:  pip install -r requirements-gpu.txt
+# En Windows, insightface 0.7.3 necesita compilador C++ (o parchearlo: ver benchmark_gpu/RESULTADOS.md).
+-r requirements.txt
+onnxruntime-gpu[cuda,cudnn]==1.23.2

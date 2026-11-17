@@ -8,6 +8,8 @@ from app.models.comensal import Comensal
 from app.models.asistencia import Asistencia
 from app.services.face_service import face_service
 from app.services.liveness_service import liveness_service
+from app.services.antispoof_service import antispoof_service
+from app.services.reto_service import reto_service
 from app.services.cache_service import EmbeddingCache
 from app.services.validacion_service import validacion_service
 from app.services.embedding_service import embedding_service
@@ -18,6 +20,53 @@ import cv2
 import numpy as np
 
 router = APIRouter(prefix="/api", tags=["reconocimiento"])
+
+# ============================================================
+# Deteccion de movimiento entre frames (anti-spoofing temporal)
+# Una foto estatica en pantalla tiene variacion ~0 entre frames.
+# Una persona real tiene micro-movimientos naturales (respiracion,
+# temblor, parpadeo) que generan variacion de ~3-15 pixeles promedio.
+# ============================================================
+_face_history = {}          # session_key -> list of (gray_face_64x64, timestamp)
+MOTION_HISTORY_SIZE = 4     # cuantos frames guardar
+MOTION_MIN_DIFF = 1.8       # variacion minima para considerar "con movimiento"
+MOTION_FRAMES_NEEDED = 3    # cuantos frames necesitamos antes de fallar por motion
+
+def _check_motion(session: str, face_bgr: np.ndarray) -> dict:
+    """
+    Compara el frame actual con los anteriores para detectar movimiento.
+    Retorna: {'score': float, 'frames': int, 'ready': bool}
+    """
+    gray = cv2.cvtColor(cv2.resize(face_bgr, (64, 64)), cv2.COLOR_BGR2GRAY)
+    now = time.time()
+
+    if session not in _face_history:
+        _face_history[session] = []
+
+    history = _face_history[session]
+
+    # Descartar frames muy viejos (mas de 15s = nueva sesion)
+    history[:] = [(f, t) for f, t in history if (now - t) < 15.0]
+    history.append((gray, now))
+
+    if len(history) > MOTION_HISTORY_SIZE:
+        history.pop(0)
+
+    if len(history) < 2:
+        return {"score": 1.0, "frames": len(history), "ready": False}
+
+    diffs = []
+    for i in range(1, len(history)):
+        diff = np.mean(np.abs(history[i][0].astype(np.float32) - history[i-1][0].astype(np.float32)))
+        diffs.append(diff)
+
+    avg_diff = float(np.mean(diffs))
+    # Clamp: 0 diff -> 0.0, MOTION_MIN_DIFF -> empieza a subir, 8.0 -> 1.0
+    motion_score = float(np.clip((avg_diff - 0.5) / 7.5, 0.0, 1.0))
+    ready = len(history) >= MOTION_FRAMES_NEEDED
+
+    return {"score": motion_score, "avg_diff": round(avg_diff, 2), "frames": len(history), "ready": ready}
+
 
 # ============================================================
 # Sistema de Votacion - estado en memoria
@@ -63,8 +112,9 @@ def _cleanup_stale():
         del _cooldowns[uid]
 
 
-def _add_vote(session: str, comensal_id, distance: float) -> dict:
-    """Agrega un voto al buffer y evalua si se alcanzo el threshold."""
+def _add_vote(session: str, comensal_id, distance: float, permitir_confirmar: bool = True) -> dict:
+    """Agrega un voto al buffer y evalua si se alcanzo el threshold.
+    permitir_confirmar=False (reto activo sin cumplir): no confirma ni inicia cooldown."""
     now = time.time()
     _cleanup_stale()
 
@@ -107,6 +157,14 @@ def _add_vote(session: str, comensal_id, distance: float) -> dict:
                     "comensal_id": best_uid,
                     "remaining": remaining,
                 }
+
+        if not permitir_confirmar:
+            return {
+                "confirmed": False,
+                "status": "CHALLENGE",
+                "progress": f"{best_count}/{settings.VOTING_THRESHOLD}",
+                "comensal_id": best_uid,
+            }
 
         # Calcular distancia promedio de los votos confirmados
         matching = [v["dist"] for v in buffer if v["uid"] == best_uid]
@@ -203,14 +261,8 @@ async def reconocer_rostro(
     if detection is None:
         return {"success": False, "status": "NO_FACE", "message": "No se detecto rostro"}
 
-    # --- 2. Validar calidad ---
-    if detection["det_score"] < settings.DETECTION_CONFIDENCE:
-        return {
-            "success": False,
-            "status": "LOW_QUALITY",
-            "message": "Rostro de baja calidad, mejora la iluminacion",
-        }
-
+    # --- 2. Validar tamano (la confianza del detector se valida despues del reto:
+    #        al girar la cabeza baja de 0.80 y esos cuadros si sirven para el reto) ---
     if (
         detection["face_width"] < settings.MIN_FACE_SIZE
         or detection["face_height"] < settings.MIN_FACE_SIZE
@@ -221,25 +273,70 @@ async def reconocer_rostro(
             "message": "Acercate mas a la camara",
         }
 
-    # --- 3. LIVENESS primero (si falla, no se intenta reconocimiento) ---
-    face_crop = face_service.get_face_crop(image, detection["bbox"])
-    liveness = liveness_service.analyze(face_crop)
+    # --- 3. LIVENESS ---
+    liveness = liveness_service.analyze(image, detection["bbox"])
 
-    if not liveness["is_live"]:
+    # El motion check solo se usa para logging/debug, NO afecta la decision.
+    # Anteriormente sumaba al combined_score, lo que permitia que un celular
+    # en movimiento pasara el threshold aunque tuviera liveness muy bajo.
+    face_crop = face_service.get_face_crop(image, detection["bbox"])
+    motion = _check_motion(session_key, face_crop)
+
+    # Con el modelo MiniFASNet activo, el decide (la heuristica queda solo en el log):
+    # con la camara real rechazaba al usuario al girar (6 % aceptado) y aceptaba el
+    # celular girado (95 %). Ver benchmark_gpu/RESULTADOS.md.
+    modelo = antispoof_service.analyze(image, detection["bbox"]) if antispoof_service else None
+    if modelo and modelo["prob_real"] is not None:
+        combined_score = modelo["prob_real"]
+        is_live = modelo["is_live"]
+    else:
+        combined_score = liveness["score"]
+        is_live = combined_score >= settings.LIVENESS_THRESHOLD
+
+    from loguru import logger as _log
+    _log.debug(
+        f"LIVENESS heuristica={liveness['score']:.3f} scores={liveness.get('scores',{})} "
+        f"modelo={modelo['prob_real'] if modelo else None} "
+        f"motion_ref={motion['score']:.2f} avg_diff={motion.get('avg_diff',0):.2f} "
+        f"threshold={settings.LIVENESS_THRESHOLD}"
+    )
+
+    if not is_live:
         await validacion_service.registrar_intento(
             db,
             None,
             "reconocimiento",
             "rechazado",
             "spoofing_detectado",
-            score_liveness=liveness["score"],
+            score_liveness=combined_score,
             es_suplantacion=True,
         )
         return {
             "success": False,
             "status": "LIVENESS_FAILED",
             "message": "Intento de suplantacion detectado",
-            "liveness_score": liveness["score"],
+            "liveness_score": round(combined_score, 3),
+            "liveness_detail": {
+                "modelo": modelo["prob_real"] if modelo else None,
+                "texture_color": round(liveness["score"], 3),
+                "motion": round(motion["score"], 3),
+                "motion_diff": motion.get("avg_diff", 0),
+                "frames_analyzed": motion["frames"],
+            },
+        }
+
+    # --- 3b. Prueba de vida ACTIVA: solo avanza con cuadros que pasaron el modelo ---
+    reto = reto_service.actualizar(session_key, detection["face"].kps) if settings.RETO_ENABLED else None
+    reto_pendiente = reto is not None and not reto["cumplido"]
+
+    # --- 3c. Calidad para identificar (no para el reto) ---
+    if detection["det_score"] < settings.DETECTION_CONFIDENCE:
+        if reto_pendiente:
+            return {"success": False, "status": "SCANNING", "message": reto["instruccion"], "reto": reto}
+        return {
+            "success": False,
+            "status": "LOW_QUALITY",
+            "message": "Rostro de baja calidad, mejora la iluminacion",
         }
 
     # --- 4. Buscar match en cache (vectorizado) ---
@@ -247,16 +344,25 @@ async def reconocer_rostro(
 
     if match is None:
         _add_vote(session_key, None, 1.0)
-        return {"success": False, "status": "NO_MATCH", "message": "Rostro no reconocido"}
+        if reto_pendiente and reto["fase"] == "girado":
+            # De perfil el embedding se aleja: no cortar el reto a la mitad
+            return {"success": False, "status": "SCANNING", "message": reto["instruccion"], "reto": reto}
+        return {"success": False, "status": "NO_MATCH", "message": "Rostro no reconocido", "liveness_score": liveness["score"]}
 
     # --- 5. Sistema de votacion ---
-    vote = _add_vote(session_key, match["comensal_id"], match["distance"])
+    vote = _add_vote(session_key, match["comensal_id"], match["distance"],
+                     permitir_confirmar=not reto_pendiente)
 
-    if vote["status"] == "SCANNING":
+    if vote["status"] in ("SCANNING", "CHALLENGE"):
+        # Mientras el reto no se cumpla, la instruccion reemplaza al progreso
+        # (la pagina ya muestra data.message en el estado SCANNING)
+        mensaje = reto["instruccion"] if reto_pendiente else f"Verificando identidad... ({vote['progress']})"
         return {
             "success": False,
             "status": "SCANNING",
-            "message": f"Verificando identidad... ({vote['progress']})",
+            "message": mensaje,
+            "reto": reto,
+            "liveness_score": round(combined_score, 3),
             "partial": {
                 "nombre": f"{match['nombre']} {match['apellido']}",
                 "confianza": round((1 - match["distance"]) * 100, 1),
@@ -281,6 +387,7 @@ async def reconocer_rostro(
 
     # --- 6. MATCH CONFIRMADO → Registrar asistencia ---
     comensal_id = vote["comensal_id"]
+    reto_service.consumir(session_key)
     comensal = await db.get(Comensal, comensal_id)
 
     if not comensal:
@@ -293,7 +400,7 @@ async def reconocer_rostro(
 
     # Validar (comida ya consumida, confianza minima, etc.)
     validacion = await validacion_service.validar_marcacion(
-        db, comensal_id, comida, confianza_pct, liveness["score"]
+        db, comensal_id, comida, confianza_pct, combined_score
     )
 
     if not validacion["valido"]:
@@ -317,7 +424,7 @@ async def reconocer_rostro(
         comensal_id=comensal_id,
         tipo="entrada",
         confianza=confianza_pct / 100,
-        score_liveness=liveness["score"],
+        score_liveness=combined_score,
         es_valida=True,
     )
     db.add(marcacion)
@@ -353,7 +460,7 @@ async def reconocer_rostro(
 
     # Registrar intento exitoso
     await validacion_service.registrar_intento(
-        db, comensal_id, "reconocimiento", "exitoso", None, confianza_pct, liveness["score"]
+        db, comensal_id, "reconocimiento", "exitoso", None, confianza_pct, combined_score
     )
 
     await db.commit()
@@ -380,5 +487,5 @@ async def reconocer_rostro(
         },
         "confianza": round(confianza_pct, 2),
         "comida": comida or "fuera de horario",
-        "liveness_score": round(liveness["score"], 2),
+        "liveness_score": round(combined_score, 3),
     }

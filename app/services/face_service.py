@@ -4,17 +4,22 @@ import numpy as np
 import cv2
 from typing import Optional
 from loguru import logger
+from app.services.gpu import providers, usa_gpu
 
 
 class FaceRecognitionService:
     def __init__(self):
         logger.info("Cargando modelos InsightFace (buffalo_l)...")
+        # Solo deteccion + reconocimiento: el sistema no usa landmarks 2D/3D ni
+        # genero/edad, y esos 3 modelos extra casi duplicaban el tiempo por frame.
         self.app = FaceAnalysis(
             name="buffalo_l",
-            providers=["CPUExecutionProvider"],
+            providers=providers(),
+            allowed_modules=["detection", "recognition"],
         )
         self.app.prepare(ctx_id=0, det_size=(640, 640))
-        logger.info("Modelos InsightFace cargados correctamente")
+        en_gpu = all(usa_gpu(m.session) for m in self.app.models.values())
+        logger.info(f"Modelos InsightFace cargados ({'GPU' if en_gpu else 'CPU'})")
 
     def detect_face(self, image: np.ndarray) -> Optional[dict]:
         """
