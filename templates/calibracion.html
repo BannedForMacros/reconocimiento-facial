@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Calibracion de liveness - Comedor UNPRG</title>
+<style>
+  body { font-family: Arial, sans-serif; background:#f4f7fa; margin:0; padding:20px; color:#222; }
+  .wrap { max-width:1100px; margin:auto; display:grid; grid-template-columns: 480px 1fr; gap:20px; }
+  .card { background:#fff; border-radius:12px; padding:18px; box-shadow:0 4px 14px rgba(0,0,0,.08); }
+  h1 { font-size:22px; margin:0 0 4px; color:#004a8f; } h2 { font-size:16px; margin:0 0 10px; }
+  video { width:100%; border-radius:8px; background:#000; transform:scaleX(-1); }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+  button { border:0; border-radius:8px; padding:10px 14px; font-size:14px; cursor:pointer; background:#e3e8ef; }
+  button.sel { background:#004a8f; color:#fff; }
+  button.go { background:#1a8f3c; color:#fff; font-size:16px; width:100%; padding:14px; }
+  button:disabled { opacity:.5; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { padding:6px 8px; border-bottom:1px solid #e5e9f0; text-align:right; }
+  th:first-child, td:first-child { text-align:left; }
+  .ok { color:#1a8f3c; font-weight:bold; } .bad { color:#c0392b; font-weight:bold; } .meh { color:#a67c00; }
+  #log { max-height:300px; overflow:auto; font-size:12px; font-family:Consolas, monospace; }
+  .hint { font-size:13px; color:#555; line-height:1.4; }
+</style>
+</head>
+<body>
+<div id="flashOverlay" style="display:none; position:fixed; inset:0; z-index:9999; transition:background 120ms ease;"></div>
+
+<div class="wrap">
+  <div class="card">
+    <h1>Calibracion de liveness</h1>
+    <p class="hint">Graba intentos reales y ataques en el kiosco. Cada muestra corre las 3 capas
+      (MiniFASNet, profundidad y luz) y se guarda en <code>data/calibracion/</code>.</p>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas" style="display:none"></canvas>
+
+    <h2>1. Modo</h2>
+    <div class="row" id="modos">
+      <button data-v="profundidad" class="sel">Profundidad (invisible)</button>
+      <button data-v="luz">Luz de pantalla</button>
+    </div>
+    <h2>2. Que hay frente a la camara</h2>
+    <div class="row" id="etiquetas">
+      <button data-v="real" class="sel">Persona real</button>
+      <button data-v="foto">Foto impresa</button>
+      <button data-v="celular">Foto en celular</button>
+      <button data-v="video">Video en celular/tablet</button>
+    </div>
+    <h2>0. Con el kiosco VACIO (nadie frente a la camara)</h2>
+    <button id="memorizar" style="width:100%;margin-bottom:10px">Memorizar fondo del kiosco</button>
+    <button class="go" id="grabar">Grabar muestra (tecla espacio)</button>
+    <p class="hint">Sugerencia: al menos 20 muestras de cada tipo y en cada modo, con varias personas,
+      de dia y de noche. En los ataques, sostén el papel/celular como lo haria un tramposo (en la mano, moviendose un poco).</p>
+  </div>
+
+  <div class="card">
+    <h2>Resultados de esta sesion (porcentaje que el sistema ACEPTARIA como real)</h2>
+    <table id="tabla"><thead><tr>
+      <th>Modo / tipo</th><th>n</th><th>MiniFASNet</th><th>Profundidad</th><th>Fondo quieto</th><th>Fondo ref.</th><th>Luz</th><th>Todas las capas</th>
+    </tr></thead><tbody></tbody></table>
+    <p class="hint">Ideal: <b>Persona real</b> cerca de 100% y los ataques cerca de 0%.
+      "Profundidad inconclusa" cuenta como aceptada (no bloquea a quien esta quieto).</p>
+    <h2 style="margin-top:16px">Ultimas muestras</h2>
+    <div id="log"></div>
+  </div>
+</div>
+
+<script>
+const video = document.getElementById('video'), canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
+let cfg = { modo:'profundidad', fotogramas:5, intervalo_ms:180, ms_por_color:360 };
+let modo = 'profundidad', etiqueta = 'real', track = null, ocupado = false;
+const stats = {};   // "modo/etiqueta" -> {n, fas, prof, fondo, ref, luz, todo}
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+
+function selector(id, set) {
+  document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => {
+    document.querySelectorAll(`#${id} button`).forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel'); set(b.dataset.v);
+  });
+}
+selector('modos', v => modo = v);
+selector('etiquetas', v => etiqueta = v);
+
+async function frame() {
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight; ctx.drawImage(video, 0, 0);
+  return await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
+}
+async function fijar(on) {
+  if (!track || !track.getCapabilities) return;
+  try { const c = track.getCapabilities(), a = {};
+    if (c.exposureMode && c.exposureMode.includes('manual')) a.exposureMode = on ? 'manual' : 'continuous';
+    if (c.whiteBalanceMode && c.whiteBalanceMode.includes('manual')) a.whiteBalanceMode = on ? 'manual' : 'continuous';
+    if (Object.keys(a).length) await track.applyConstraints({ advanced: [a] });
+  } catch (e) {}
+}
+async function rafaga() {
+  const blobs = [];
+  if (modo !== 'luz') {
+    for (let i = 0; i < cfg.fotogramas; i++) { blobs.push(await frame()); if (i < cfg.fotogramas - 1) await esperar(cfg.intervalo_ms); }
+    return { blobs };
+  }
+  const d = await (await fetch('/api/liveness/desafio', { method:'POST' })).json();
+  const ov = document.getElementById('flashOverlay'), indices = [];
+  ov.style.display = 'block'; await fijar(true);
+  try {
+    for (let i = 0; i < d.colores.length; i++) {
+      ov.style.background = `rgb(${d.colores[i].join(',')})`;
+      await esperar(d.ms_por_color * 0.6); blobs.push(await frame()); indices.push(i); await esperar(d.ms_por_color * 0.4);
+    }
+  } finally { ov.style.display = 'none'; await fijar(false); }
+  return { blobs, desafio_id: d.id, indices };
+}
+
+function pct(a, n) { return n ? (100 * a / n).toFixed(0) + '%' : '-'; }
+function clase(et, v, n) { if (!n) return ''; const p = v / n; return et === 'real' ? (p > .9 ? 'ok' : p > .7 ? 'meh' : 'bad') : (p < .1 ? 'ok' : p < .3 ? 'meh' : 'bad'); }
+function pintar() {
+  const tb = document.querySelector('#tabla tbody'); tb.innerHTML = '';
+  Object.keys(stats).sort().forEach(k => {
+    const s = stats[k], et = k.split('/')[1];
+    tb.insertAdjacentHTML('beforeend', `<tr><td>${k}</td><td>${s.n}</td>` +
+      ['fas', 'prof', 'fondo', 'ref', 'luz', 'todo'].map(c => c === 'luz' && !k.startsWith('luz') ? '<td>-</td>'
+        : `<td class="${clase(et, s[c], s.n)}">${pct(s[c], s.n)}</td>`).join('') + '</tr>');
+  });
+}
+
+async function grabar() {
+  if (ocupado) return; ocupado = true; const btn = document.getElementById('grabar'); btn.disabled = true;
+  try {
+    const r = await rafaga(), fd = new FormData();
+    fd.append('etiqueta', etiqueta);
+    r.blobs.forEach((b, i) => fd.append('fotos', b, `f${i}.jpg`));
+    if (r.desafio_id) { fd.append('desafio_id', r.desafio_id); fd.append('indices', JSON.stringify(r.indices)); }
+    const res = await (await fetch('/api/calibracion/muestra', { method:'POST', body: fd })).json();
+    const log = document.getElementById('log');
+    if (!res.ok || res.estado !== 'OK') {
+      log.insertAdjacentHTML('afterbegin', `<div class="meh">${etiqueta}: ${res.estado || res.detail} (no se cuenta)</div>`); return;
+    }
+    const s = res.senales, k = `${res.modo}/${etiqueta}`;
+    const fasOk = s.minifasnet_ok, profOk = s.profundidad.estado !== 'plano', luzOk = !s.luz || s.luz.estado === 'real';
+    const fondoOk = s.fondo.estado !== 'se_mueve', refOk = s.referencia.estado !== 'no_coincide';
+    stats[k] = stats[k] || { n:0, fas:0, prof:0, fondo:0, ref:0, luz:0, todo:0 };
+    const st = stats[k]; st.n++; st.fas += fasOk; st.prof += profOk; st.fondo += fondoOk; st.ref += refOk; st.luz += luzOk;
+    st.todo += (fasOk && profOk && fondoOk && refOk && luzOk);
+    log.insertAdjacentHTML('afterbegin', `<div>${k}: FAS=${s.minifasnet} | prof=${s.profundidad.estado} ` +
+      `(ratio=${s.profundidad.ratio}, mov=${s.profundidad.movimiento}) | fondo=${s.fondo.estado} (lamina=${s.fondo.lamina}) ` +
+      `| ref=${s.referencia.estado} (${s.referencia.fraccion})` +
+      (s.luz ? ` | luz=${s.luz.estado} (corr=${s.luz.correlacion}, resp=${s.luz.respuesta})` : '') + '</div>');
+    pintar();
+  } catch (e) { console.error(e); }
+  finally { ocupado = false; btn.disabled = false; }
+}
+document.getElementById('grabar').onclick = grabar;
+document.getElementById('memorizar').onclick = async () => {
+  const b = document.getElementById('memorizar'); b.disabled = true; let n = 0;
+  for (let i = 0; i < 8; i++) {
+    canvas.width = video.videoWidth; canvas.height = video.videoHeight; ctx.drawImage(video, 0, 0);
+    const r = await (await fetch('/api/validar_rostro', { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ frame: canvas.toDataURL('image/jpeg', 0.8), kiosco: true }) })).json();
+    if (r.code === 'NO_FACE') n++; await esperar(250);
+  }
+  b.disabled = false;
+  b.textContent = n >= 5 ? `Fondo memorizado (${n} fotogramas). Volver a memorizar` : 'No se pudo: debe estar vacio. Reintentar';
+};
+document.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); grabar(); } });
+
+navigator.mediaDevices.getUserMedia({ video: { width:640, height:480 } }).then(async st => {
+  video.srcObject = st; track = st.getVideoTracks()[0];
+  try { cfg = await (await fetch('/api/liveness/config')).json(); } catch (e) {}
+});
+</script>
+</body>
+</html>

@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
-from app.routes import registro, reconocimiento, auth, reportes, rafaga
+from app.routes import registro, reconocimiento, auth, reportes, rafaga, calibracion
 from app.services.cache_service import EmbeddingCache
 from app.core.database import AsyncSessionLocal, engine
 from loguru import logger
@@ -16,6 +16,7 @@ app.include_router(reconocimiento.router)
 app.include_router(auth.router)
 app.include_router(reportes.router)
 app.include_router(rafaga.router)
+app.include_router(calibracion.router)
 
 
 @app.on_event("startup")
