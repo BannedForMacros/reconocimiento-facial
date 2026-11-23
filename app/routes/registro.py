@@ -9,6 +9,7 @@ from app.services.face_service import face_service
 from app.services.liveness_service import liveness_service
 from app.services.embedding_service import embedding_service
 from app.services.cache_service import EmbeddingCache
+from app.services.multiframe_liveness import referencia_fondo
 import cv2
 import base64
 import numpy as np
@@ -40,6 +41,10 @@ async def validar_rostro(request: Request):
 
         detection = face_service.detect_face(image)
         if detection is None:
+            # Kiosco vacio: aprender/actualizar su fondo de referencia
+            if body.get("kiosco"):
+                kiosco = request.client.host if request.client else "default"
+                referencia_fondo.actualizar(kiosco, image)
             return {"ok": False, "msg": "No se detecta rostro", "code": "NO_FACE"}
 
         det_score = detection["det_score"]
@@ -63,8 +68,14 @@ async def validar_rostro(request: Request):
             }
 
         # Liveness check
-        face_crop = face_service.get_face_crop(image, detection["bbox"])
-        liveness = liveness_service.analyze(face_crop)
+        liveness = liveness_service.analyze(image, detection["bbox"])
+        if liveness["detail"] == "low_light":
+            return {
+                "ok": False,
+                "msg": "Falta iluminacion. Acercate a una fuente de luz.",
+                "code": "LOW_LIGHT",
+                "det_score": round(det_score, 2),
+            }
 
         return {
             "ok": True,
@@ -132,7 +143,7 @@ async def registrar_multiframe(
 
     # --- Procesar cada frame ---
     valid_embeddings = []
-    rejection_reasons = {"no_face": 0, "low_conf": 0, "small": 0, "spoof": 0, "error": 0}
+    rejection_reasons = {"no_face": 0, "low_conf": 0, "small": 0, "low_light": 0, "spoof": 0, "error": 0}
 
     for frame_b64 in frames_b64:
         try:
@@ -166,8 +177,10 @@ async def registrar_multiframe(
                 continue
 
             # Liveness check
-            face_crop = face_service.get_face_crop(image, detection["bbox"])
-            liveness = liveness_service.analyze(face_crop)
+            liveness = liveness_service.analyze(image, detection["bbox"])
+            if liveness["detail"] == "low_light":
+                rejection_reasons["low_light"] += 1
+                continue
             if not liveness["is_live"]:
                 rejection_reasons["spoof"] += 1
                 continue
@@ -187,6 +200,8 @@ async def registrar_multiframe(
             detail.append(f"{rejection_reasons['low_conf']} baja confianza")
         if rejection_reasons["small"] > 0:
             detail.append(f"{rejection_reasons['small']} rostro muy pequeno")
+        if rejection_reasons["low_light"] > 0:
+            detail.append(f"{rejection_reasons['low_light']} con poca luz")
         if rejection_reasons["spoof"] > 0:
             detail.append(f"{rejection_reasons['spoof']} liveness fallido")
 

@@ -1,0 +1,16 @@
+# Entornos virtuales
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# Secretos
+.env
+
+# Datos de calibracion y registros de liveness (contienen rostros de personas)
+data/
+
+# Detector de objetos YOLOX probado para liveness: no se usa (no mejoro los resultados)
+models/objetos/
