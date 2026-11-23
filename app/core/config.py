@@ -17,8 +17,11 @@ class Settings(BaseSettings):
     FRAMES_FOR_REGISTRATION: int = 15
     MIN_VALID_FRAMES: int = 10
 
-    # === Liveness (Anti-Spoofing) ===
-    LIVENESS_THRESHOLD: float = 0.45
+    # === Liveness (Anti-Spoofing, MiniFASNet) ===
+    # Probabilidad minima de "rostro real" (0-1). Calibrar con datos propios.
+    LIVENESS_THRESHOLD: float = 0.50
+    # Brillo medio minimo del rostro (0-255). Por debajo se pide mas luz.
+    LIVENESS_MIN_BRIGHTNESS: float = 60.0
 
     # Rendimiento: tamano de entrada del detector (640 = original, 480/320 = mas rapido)
     DET_SIZE: int = 480
