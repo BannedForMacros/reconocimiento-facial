@@ -222,8 +222,14 @@ async def reconocer_rostro(
         }
 
     # --- 3. LIVENESS primero (si falla, no se intenta reconocimiento) ---
-    face_crop = face_service.get_face_crop(image, detection["bbox"])
-    liveness = liveness_service.analyze(face_crop)
+    liveness = liveness_service.analyze(image, detection["bbox"])
+
+    if liveness["detail"] == "low_light":
+        return {
+            "success": False,
+            "status": "LOW_LIGHT",
+            "message": "Falta iluminacion, acercate a la luz",
+        }
 
     if not liveness["is_live"]:
         await validacion_service.registrar_intento(
@@ -280,20 +286,36 @@ async def reconocer_rostro(
         return {"success": False, "status": "NO_MATCH", "message": "Rostro no reconocido"}
 
     # --- 6. MATCH CONFIRMADO → Registrar asistencia ---
-    comensal_id = vote["comensal_id"]
+    return await _confirmar_asistencia(
+        db, cache, vote["comensal_id"], vote["avg_distance"],
+        liveness["score"], detection["embedding"],
+    )
+
+
+# ============================================================
+# Registro de asistencia (comun a /reconocer y /reconocer_rafaga)
+# ============================================================
+async def _confirmar_asistencia(
+    db: AsyncSession,
+    cache: EmbeddingCache,
+    comensal_id: int,
+    avg_distance: float,
+    liveness_score: float,
+    embedding: np.ndarray,
+    liveness_detalle: dict | None = None,
+) -> dict:
     comensal = await db.get(Comensal, comensal_id)
 
     if not comensal:
         return {"success": False, "status": "ERROR", "message": "Comensal no encontrado en BD"}
 
-    avg_distance = vote["avg_distance"]
     confianza_pct = (1 - avg_distance) * 100
     ahora = datetime.now()
     comida = await determinar_comida(ahora.time(), db)
 
     # Validar (comida ya consumida, confianza minima, etc.)
     validacion = await validacion_service.validar_marcacion(
-        db, comensal_id, comida, confianza_pct, liveness["score"]
+        db, comensal_id, comida, confianza_pct, liveness_score
     )
 
     if not validacion["valido"]:
@@ -304,7 +326,7 @@ async def reconocer_rostro(
             "rechazado",
             validacion["mensaje"],
             confianza_pct,
-            liveness["score"],
+            liveness_score,
         )
         return {
             "success": False,
@@ -317,7 +339,7 @@ async def reconocer_rostro(
         comensal_id=comensal_id,
         tipo="entrada",
         confianza=confianza_pct / 100,
-        score_liveness=liveness["score"],
+        score_liveness=liveness_score,
         es_valida=True,
     )
     db.add(marcacion)
@@ -353,7 +375,7 @@ async def reconocer_rostro(
 
     # Registrar intento exitoso
     await validacion_service.registrar_intento(
-        db, comensal_id, "reconocimiento", "exitoso", None, confianza_pct, liveness["score"]
+        db, comensal_id, "reconocimiento", "exitoso", None, confianza_pct, liveness_score
     )
 
     await db.commit()
@@ -363,7 +385,7 @@ async def reconocer_rostro(
     # mezclar el embedding actual con el promedio para que el sistema "aprenda"
     # la nueva apariencia y no falle la proxima vez.
     if avg_distance > settings.ENRICHMENT_THRESHOLD:
-        enriched = cache.enrich_embedding(comensal_id, detection["embedding"], weight=0.15)
+        enriched = cache.enrich_embedding(comensal_id, embedding, weight=0.15)
         if enriched:
             # Persistir el embedding actualizado en BD (async, no bloqueante)
             updated_emb = cache._data[comensal_id]["embedding"]
@@ -380,5 +402,6 @@ async def reconocer_rostro(
         },
         "confianza": round(confianza_pct, 2),
         "comida": comida or "fuera de horario",
-        "liveness_score": round(liveness["score"], 2),
+        "liveness_score": round(liveness_score, 2),
+        "liveness": liveness_detalle,
     }
