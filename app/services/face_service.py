@@ -4,17 +4,22 @@ import numpy as np
 import cv2
 from typing import Optional
 from loguru import logger
+from app.core.config import settings
 
 
 class FaceRecognitionService:
     def __init__(self):
         logger.info("Cargando modelos InsightFace (buffalo_l)...")
+        # Solo los modulos que se usan: deteccion (SCRFD), reconocimiento (ArcFace)
+        # y 106 puntos faciales (para la prueba de profundidad). Se omiten el
+        # modelo 3D de 68 puntos y el de genero/edad (~145 MB y ~35% del tiempo).
         self.app = FaceAnalysis(
             name="buffalo_l",
             providers=["CPUExecutionProvider"],
+            allowed_modules=["detection", "recognition", "landmark_2d_106"],
         )
-        self.app.prepare(ctx_id=0, det_size=(640, 640))
-        logger.info("Modelos InsightFace cargados correctamente")
+        self.app.prepare(ctx_id=0, det_size=(settings.DET_SIZE, settings.DET_SIZE))
+        logger.info(f"Modelos InsightFace cargados (det_size={settings.DET_SIZE})")
 
     def detect_face(self, image: np.ndarray) -> Optional[dict]:
         """
@@ -43,6 +48,7 @@ class FaceRecognitionService:
             "bbox": bbox,
             "face_width": face_w,
             "face_height": face_h,
+            "landmarks_106": getattr(face, "landmark_2d_106", None),
         }
 
     def get_face_crop(

@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # === Liveness (Anti-Spoofing) ===
     LIVENESS_THRESHOLD: float = 0.45
 
+    # Rendimiento: tamano de entrada del detector (640 = original, 480/320 = mas rapido)
+    DET_SIZE: int = 480
+
     # === Sistema de Votacion ===
     VOTING_WINDOW: int = 5
     VOTING_THRESHOLD: int = 3
