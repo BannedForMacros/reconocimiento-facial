@@ -1,0 +1,286 @@
+<title>Flujo del Kiosco Comedor UNPRG</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: columna central de etapas en secuencia; cada etapa tiene a la derecha su salida de rechazo. Abajo, el registro y los modelos. */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --fg:#16202a; --muted:#5a6876; --line:#d5dce3;
+  --accent:#0b6e8a; --accent-soft:#dcedf2;
+  --ok:#1d7a46; --ok-soft:#dff1e6; --bad:#b4372f; --bad-soft:#f8e3e1; --warn:#9a6a00; --warn-soft:#f6ecd2;
+  --f-display:"Archivo",system-ui,sans-serif; --f-body:"IBM Plex Sans",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f151b; --surface:#172029; --fg:#e4eaf0; --muted:#94a3b1; --line:#2b3844;
+  --accent:#4fb8d6; --accent-soft:#16323d;
+  --ok:#5ccb8a; --ok-soft:#163325; --bad:#f08a80; --bad-soft:#3a1d1b; --warn:#e3b44c; --warn-soft:#352a12; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f151b; --surface:#172029; --fg:#e4eaf0; --muted:#94a3b1; --line:#2b3844;
+  --accent:#4fb8d6; --accent-soft:#16323d;
+  --ok:#5ccb8a; --ok-soft:#163325; --bad:#f08a80; --bad-soft:#3a1d1b; --warn:#e3b44c; --warn-soft:#352a12; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:2.5rem 4rem}
+.wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:3rem}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(1.9rem,4.5vw,2.6rem);font-weight:800;letter-spacing:-.01em}
+h2{font-size:1.35rem;font-weight:700}
+h3{font-size:1.02rem;font-weight:700}
+p{margin:0}
+.lead{color:var(--muted);max-width:62ch;margin-top:.6rem}
+.eyebrow{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+code,.mono{font-family:var(--f-mono);font-size:.84em}
+.meta{display:flex;flex-wrap:wrap;gap:.5rem 1.4rem;margin-top:1.1rem;font-family:var(--f-mono);font-size:.8rem;color:var(--muted)}
+.meta b{color:var(--fg);font-weight:500}
+
+/* Pipeline */
+.flow{display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:0 1.25rem;align-items:start}
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:1rem 1.15rem;display:flex;flex-direction:column;gap:.45rem;position:relative}
+.stage .head{display:flex;align-items:baseline;gap:.6rem;flex-wrap:wrap}
+.step{font-family:var(--f-mono);font-size:.75rem;color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:.05rem .4rem;font-weight:500}
+.stage p{color:var(--muted);font-size:.92rem}
+.stage ul{margin:0;padding-left:1.1rem;color:var(--muted);font-size:.9rem;display:flex;flex-direction:column;gap:.15rem}
+.stage.final{border-color:var(--ok);background:var(--ok-soft)}
+.stage.final .step{background:var(--surface);color:var(--ok)}
+.stage.idle{border-style:dashed}
+.exit{display:flex;flex-direction:column;gap:.35rem;padding-top:.9rem}
+.exit .lbl{font-family:var(--f-mono);font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:flex;align-items:center;gap:.4rem}
+.exit .lbl::before{content:"";width:18px;height:1px;background:var(--bad)}
+.chip{display:inline-flex;align-items:center;gap:.35rem;font-family:var(--f-mono);font-size:.76rem;font-weight:500;border-radius:999px;padding:.14rem .6rem;width:fit-content}
+.chip.bad{color:var(--bad);background:var(--bad-soft)}
+.chip.ok{color:var(--ok);background:var(--surface);border:1px solid var(--ok)}
+.chip.warn{color:var(--warn);background:var(--warn-soft)}
+.chip.info{color:var(--accent);background:var(--accent-soft)}
+.exit small{color:var(--muted);font-size:.8rem;line-height:1.4}
+.arrow{height:30px;display:flex;justify-content:flex-start;padding-left:2rem}
+.arrow span{position:relative;width:2px;background:var(--line);height:100%}
+.arrow span::after{content:"";position:absolute;bottom:-1px;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--muted);border-bottom:0}
+.arrow em{font-style:normal;font-family:var(--f-mono);font-size:.72rem;color:var(--ok);margin-left:.8rem;align-self:center}
+
+.layers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.6rem;margin-top:.3rem}
+.layer{border:1px solid var(--line);border-radius:8px;padding:.7rem .8rem;display:flex;flex-direction:column;gap:.3rem;background:var(--bg)}
+.layer h4{margin:0;font-family:var(--f-display);font-size:.92rem;font-weight:700}
+.layer p{font-size:.84rem}
+.layer .rule{font-family:var(--f-mono);font-size:.74rem;color:var(--fg)}
+.layer .stop{font-size:.76rem;color:var(--ok)}
+.shadow{display:flex;gap:.6rem;align-items:flex-start;background:var(--warn-soft);border-radius:8px;padding:.6rem .8rem;font-size:.86rem;color:var(--fg);margin-top:.3rem}
+.shadow b{color:var(--warn)}
+
+/* Bottom sections */
+.two{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:1.5rem}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:1.2rem 1.25rem;display:flex;flex-direction:column;gap:.9rem;min-width:0}
+.mini{display:flex;flex-direction:column;gap:0;counter-reset:m}
+.mini li{list-style:none;display:grid;grid-template-columns:26px minmax(0,1fr);gap:.6rem;padding:.45rem 0;border-bottom:1px solid var(--line);font-size:.9rem}
+.mini li:last-child{border-bottom:0}
+.mini li::before{counter-increment:m;content:counter(m);font-family:var(--f-mono);font-size:.75rem;color:var(--accent);background:var(--accent-soft);border-radius:4px;text-align:center;height:1.35rem;line-height:1.35rem}
+.mini{margin:0;padding:0}
+.mini span{color:var(--muted)}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.86rem}
+th,td{text-align:left;padding:.45rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:500}
+td:first-child{font-weight:600;white-space:nowrap}
+td .mono{color:var(--muted)}
+.foot{color:var(--muted);font-size:.84rem;border-top:1px solid var(--line);padding-top:1rem}
+
+@media (max-width:760px){
+  .row{grid-template-columns:minmax(0,1fr)}
+  .exit{padding:.55rem 0 0 1rem;border-left:2px solid var(--bad-soft);margin-left:1.2rem}
+  .layers{grid-template-columns:minmax(0,1fr)}
+  .two{grid-template-columns:minmax(0,1fr)}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Sistema Comedor UNPRG · flujo actual</div>
+    <h1>Del comensal frente a la cámara a la asistencia registrada</h1>
+    <p class="lead">Recorrido completo de una persona por el kiosco. Cada etapa tiene a la derecha la salida que corta el proceso cuando la etapa falla. Si todas pasan, la asistencia queda registrada en unos 2 segundos.</p>
+    <div class="meta">
+      <span>Cámara: <b>webcam fija</b></span>
+      <span>Procesamiento: <b>CPU (onnxruntime)</b></span>
+      <span>Ráfaga: <b>5 fotos × 180 ms</b></span>
+      <span>Decisión: <b>≈ 2 s</b></span>
+    </div>
+  </header>
+
+  <section class="flow" aria-label="Flujo de reconocimiento">
+    <div class="row">
+      <div class="stage idle">
+        <div class="head"><span class="step">0</span><h3>Kiosco en espera</h3></div>
+        <p>Cada 0.7 s el navegador manda una foto a <code>/api/validar_rostro</code> para ver si hay alguien.</p>
+        <ul>
+          <li>Si no hay nadie, esa foto actualiza el <b>fondo memorizado</b> del kiosco (de día, tarde y noche).</li>
+          <li>Si aparece una cara, empieza la ráfaga.</li>
+        </ul>
+      </div>
+      <div class="exit">
+        <span class="lbl">Sin cara</span>
+        <span class="chip info">sigue esperando</span>
+        <small>Aprende el fondo con cada foto vacía.</small>
+      </div>
+    </div>
+    <div class="arrow"><span></span><em>hay una cara</em></div>
+
+    <div class="row">
+      <div class="stage">
+        <div class="head"><span class="step">1</span><h3>Ráfaga de 5 fotos</h3></div>
+        <p>La cámara fija exposición y balance de blancos, toma 5 fotos en ~1 s y las envía juntas a <code>/api/reconocer_rafaga</code>.</p>
+        <ul>
+          <li><b>Modo profundidad</b> (por defecto): invisible para la persona.</li>
+          <li><b>Modo luz</b>: antes pide al servidor una secuencia de colores al azar (<code>/api/liveness/desafio</code>, de un solo uso) y la pantalla la muestra mientras captura.</li>
+        </ul>
+      </div>
+      <div class="exit">
+        <span class="lbl">Falla el envío</span>
+        <span class="chip bad">ERROR</span>
+      </div>
+    </div>
+    <div class="arrow"><span></span><em>5 fotos recibidas</em></div>
+
+    <div class="row">
+      <div class="stage">
+        <div class="head"><span class="step">2</span><h3>Detección y calidad</h3><span class="mono" style="color:var(--muted)">SCRFD + 106 puntos</span></div>
+        <p>En cada foto se busca la cara, se marcan 106 puntos faciales y se revisa tamaño, nitidez y brillo.</p>
+        <ul>
+          <li>Se necesitan al menos <b>3 fotos válidas de 5</b>.</li>
+          <li>Brillo mínimo de la cara: 60.</li>
+        </ul>
+      </div>
+      <div class="exit">
+        <span class="lbl">No alcanza</span>
+        <span class="chip bad">NO_FACE</span>
+        <span class="chip bad">TOO_FAR</span>
+        <span class="chip bad">LOW_QUALITY</span>
+        <span class="chip bad">LOW_LIGHT</span>
+        <small>El kiosco le dice a la persona qué corregir.</small>
+      </div>
+    </div>
+    <div class="arrow"><span></span><em>≥ 3 fotos buenas</em></div>
+
+    <div class="row">
+      <div class="stage">
+        <div class="head"><span class="step">3</span><h3>Liveness con IA</h3><span class="mono" style="color:var(--muted)">MiniFASNetV2 + V1SE</span></div>
+        <p>Dos redes pequeñas miran la textura alrededor de la cara (a 2.7× y 4× su tamaño) y dan una nota de 0 a 1 de qué tan real parece. Detectan bordes de celular, moiré y reflejos.</p>
+        <ul><li>Pasa si la nota es <b>≥ 0.50</b>.</li></ul>
+      </div>
+      <div class="exit">
+        <span class="lbl">Parece falsa</span>
+        <span class="chip bad">LIVENESS_FAILED</span>
+        <small>Esta capa sí bloquea hoy.</small>
+      </div>
+    </div>
+    <div class="arrow"><span></span><em>parece real</em></div>
+
+    <div class="row">
+      <div class="stage">
+        <div class="head"><span class="step">4</span><h3>Pruebas físicas sobre la ráfaga</h3></div>
+        <p>Comparan las 5 fotos entre sí y con el fondo memorizado. Miden cosas que una foto o una pantalla no pueden imitar.</p>
+        <div class="layers">
+          <div class="layer">
+            <h4>Profundidad</h4>
+            <p>Con los 106 puntos revisa si la cara se mueve como un objeto 3D o como una lámina plana.</p>
+            <span class="rule">3D si relación ≥ 0.35 y movimiento ≥ 12</span>
+            <span class="stop">Frena fotos: pasa solo el 2.2%</span>
+          </div>
+          <div class="layer">
+            <h4>Fondo de referencia</h4>
+            <p>Compara por textura, en bloques, la franja alrededor de la cabeza con el fondo vacío memorizado.</p>
+            <span class="rule">Real si coincide ≥ 30% de bloques</span>
+            <span class="stop">Frena videos en celular: 0% pasa</span>
+          </div>
+          <div class="layer">
+            <h4>Luz <span class="mono" style="color:var(--muted);font-weight:400">(modo luz)</span></h4>
+            <p>Revisa si la piel cambia de color siguiendo los colores que mostró la pantalla.</p>
+            <span class="rule">Real si correlación ≥ 0.5</span>
+            <span class="stop" style="color:var(--warn)">Falta medirla en el kiosco</span>
+          </div>
+        </div>
+        <div class="shadow"><span>⚠</span><p><b>Modo sombra.</b> Hoy estas tres pruebas solo anotan su resultado en <code>data/liveness_log.jsonl</code> y no bloquean. Se activan con <code>LIVENESS_CAPAS_ACTIVAS=true</code> en el <code>.env</code>, después de calibrar con <code>/calibracion</code>.</p></div>
+      </div>
+      <div class="exit">
+        <span class="lbl">Si están activas</span>
+        <span class="chip bad">LIVENESS_FAILED</span>
+        <small>Con el modo sombra, la ráfaga sigue al paso 5 aunque fallen.</small>
+      </div>
+    </div>
+    <div class="arrow"><span></span><em>persona real</em></div>
+
+    <div class="row">
+      <div class="stage">
+        <div class="head"><span class="step">5</span><h3>¿Quién es?</h3><span class="mono" style="color:var(--muted)">ArcFace ResNet-50</span></div>
+        <p>Cada foto válida se convierte en una huella de 512 números y se compara con todos los comensales, que están en memoria para responder rápido.</p>
+        <ul>
+          <li>Coincide si la distancia coseno es <b>&lt; 0.45</b>.</li>
+          <li>La misma persona tiene que salir en <b>al menos el 60%</b> de las fotos (3 de 5).</li>
+        </ul>
+      </div>
+      <div class="exit">
+        <span class="lbl">No reconocido</span>
+        <span class="chip bad">NO_MATCH</span>
+        <small>Persona no registrada o sin mayoría.</small>
+      </div>
+    </div>
+    <div class="arrow"><span></span><em>comensal identificado</em></div>
+
+    <div class="row">
+      <div class="stage">
+        <div class="head"><span class="step">6</span><h3>Control de repetición</h3></div>
+        <p>Revisa que el comensal no haya marcado hace poco, para que no se registre dos veces seguidas.</p>
+      </div>
+      <div class="exit">
+        <span class="lbl">Ya marcó</span>
+        <span class="chip warn">COOLDOWN</span>
+      </div>
+    </div>
+    <div class="arrow"><span></span><em>puede marcar</em></div>
+
+    <div class="row">
+      <div class="stage final">
+        <div class="head"><span class="step">7</span><h3>Asistencia registrada</h3></div>
+        <p style="color:var(--fg)">Guarda la asistencia en PostgreSQL con la distancia y la nota de liveness, y el kiosco saluda a la persona con mensaje en pantalla y voz.</p>
+      </div>
+      <div class="exit">
+        <span class="lbl" style="--x:0">Resultado</span>
+        <span class="chip ok">MATCH</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="two">
+    <section class="panel">
+      <div>
+        <div class="eyebrow">Una sola vez por persona</div>
+        <h2>Registro de un comensal</h2>
+      </div>
+      <ol class="mini">
+        <li><div><b>Varias fotos</b> <span>desde la pantalla de registro.</span></div></li>
+        <li><div><b>Detección y calidad</b> <span>con SCRFD: cara grande, nítida y con luz suficiente.</span></div></li>
+        <li><div><b>Liveness</b> <span>con MiniFASNet, para no registrar una foto.</span></div></li>
+        <li><div><b>Huella facial</b> <span>con ArcFace: vector de 512 números.</span></div></li>
+        <li><div><b>Revisión de duplicados</b> <span>si ya existe alguien a distancia &lt; 0.50, se avisa.</span></div></li>
+        <li><div><b>Guardado</b> <span>en la tabla <code>embeddings</code> de PostgreSQL con pgvector, y en la memoria del servidor.</span></div></li>
+      </ol>
+    </section>
+
+    <section class="panel">
+      <div>
+        <div class="eyebrow">Qué corre en cada foto</div>
+        <h2>Modelos</h2>
+      </div>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Modelo</th><th>Tarea</th></tr></thead>
+          <tbody>
+            <tr><td>SCRFD</td><td>Encuentra la cara<br><span class="mono">det_10g.onnx</span></td></tr>
+            <tr><td>106 puntos</td><td>Ojos, nariz, boca y contorno, para la profundidad<br><span class="mono">2d106det.onnx</span></td></tr>
+            <tr><td>MiniFASNet</td><td>¿Real o foto/pantalla?<br><span class="mono">MiniFASNetV2 + V1SE</span></td></tr>
+            <tr><td>ArcFace</td><td>¿Quién es? (huella de 512 números)<br><span class="mono">w600k_r50.onnx</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <p class="foot">Valores tomados de <code>app/core/config.py</code> y de las pruebas con CelebA-Spoof y CREMA-D. Los porcentajes vienen de ataques simulados, no de la cámara real del kiosco; la calibración en <code>/calibracion</code> los confirma.</p>
+</div>
