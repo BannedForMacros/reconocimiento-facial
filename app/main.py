@@ -1,10 +1,9 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import text
-from app.routes import registro, reconocimiento, auth, reportes, rafaga, calibracion
+from app.routes import registro, auth, reportes, rafaga, calibracion
 from app.services.cache_service import EmbeddingCache
-from app.core.database import AsyncSessionLocal, engine
+from app.core.database import AsyncSessionLocal
 from loguru import logger
 
 app = FastAPI(title="Sistema Comedor UNPRG")
@@ -12,7 +11,6 @@ templates = Jinja2Templates(directory="templates")
 
 # Routers
 app.include_router(registro.router)
-app.include_router(reconocimiento.router)
 app.include_router(auth.router)
 app.include_router(reportes.router)
 app.include_router(rafaga.router)
@@ -22,16 +20,6 @@ app.include_router(calibracion.router)
 @app.on_event("startup")
 async def startup_event():
     logger.info("Inicializando sistema...")
-
-    # Asegurar que la columna es_promedio existe (migracion)
-    async with engine.begin() as conn:
-        await conn.execute(
-            text(
-                "ALTER TABLE embeddings "
-                "ADD COLUMN IF NOT EXISTS es_promedio BOOLEAN DEFAULT FALSE"
-            )
-        )
-    logger.info("Schema de BD verificado")
 
     # Cargar cache de embeddings en memoria
     async with AsyncSessionLocal() as db:
@@ -53,9 +41,10 @@ async def registro_view(request: Request):
     return templates.TemplateResponse("registro.html", {"request": request})
 
 
-@app.get("/reconocimiento", response_class=HTMLResponse)
-async def reconocimiento_view(request: Request):
-    return templates.TemplateResponse("reconocimiento.html", {"request": request})
+@app.get("/reconocimiento")
+async def reconocimiento_view():
+    # El kiosco es la pagina principal; se mantiene la ruta vieja por enlaces guardados
+    return RedirectResponse("/")
 
 
 @app.get("/login", response_class=HTMLResponse)

@@ -327,6 +327,15 @@
         <i id="soundIcon" class="fas fa-volume-mute"></i>
     </button>
 
+    <!-- Capa de luz: cubre la pantalla durante el desafio de colores (modo "luz", ~1.4 s) -->
+    <div id="flashOverlay" style="display:none; position:fixed; inset:0; z-index:9999;
+         transition: background 120ms ease; align-items:flex-end; justify-content:center;">
+        <div style="margin-bottom:8vh; padding:10px 22px; border-radius:30px;
+             background:rgba(0,0,0,.35); color:#fff; font:600 20px Arial;">
+            Mira a la pantalla un momento...
+        </div>
+    </div>
+
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
@@ -373,36 +382,120 @@
         document.addEventListener('touchstart', _desbloquearSilencioso, { once: true });
 
         // ==========================================================
+        // Captura por RAFAGA (liveness multi-fotograma)
+        //   modo "profundidad": 5 fotos en ~1 s, invisible para la persona
+        //   modo "luz": la pantalla ilumina el rostro con colores al azar
+        // ==========================================================
+        let cfg = { modo: 'profundidad', fotogramas: 5, intervalo_ms: 180, ms_por_color: 360 };
+        let videoTrack = null;
+        let pausaHasta = 0;            // tras un rechazo, no reintentar de inmediato
+        const esperar = ms => new Promise(r => setTimeout(r, ms));
+
+        async function capturarFotograma(calidad = 0.9) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            return await new Promise(r => canvas.toBlob(r, 'image/jpeg', calidad));
+        }
+
+        // Fija exposicion/balance de blancos durante el destello (si la camara lo permite),
+        // para que la camara no "compense" la luz que se quiere medir.
+        async function fijarCamara(fijar) {
+            if (!videoTrack || !videoTrack.getCapabilities) return;
+            try {
+                const cap = videoTrack.getCapabilities();
+                const adv = {};
+                if (cap.exposureMode && cap.exposureMode.includes('manual')) adv.exposureMode = fijar ? 'manual' : 'continuous';
+                if (cap.whiteBalanceMode && cap.whiteBalanceMode.includes('manual')) adv.whiteBalanceMode = fijar ? 'manual' : 'continuous';
+                if (Object.keys(adv).length) await videoTrack.applyConstraints({ advanced: [adv] });
+            } catch (e) { /* camara sin soporte: se mide igual */ }
+        }
+
+        async function capturarRafaga(modo) {
+            const blobs = [];
+            if (modo !== 'luz') {
+                for (let i = 0; i < cfg.fotogramas; i++) {
+                    blobs.push(await capturarFotograma());
+                    if (i < cfg.fotogramas - 1) await esperar(cfg.intervalo_ms);
+                }
+                return { blobs };
+            }
+            const d = await (await fetch('/api/liveness/desafio', { method: 'POST' })).json();
+            const overlay = document.getElementById('flashOverlay');
+            const indices = [];
+            overlay.style.display = 'flex';
+            await fijarCamara(true);
+            try {
+                for (let i = 0; i < d.colores.length; i++) {
+                    const [r, g, b] = d.colores[i];
+                    overlay.style.background = `rgb(${r},${g},${b})`;
+                    await esperar(d.ms_por_color * 0.6);   // dejar que la luz se estabilice
+                    blobs.push(await capturarFotograma());
+                    indices.push(i);
+                    await esperar(d.ms_por_color * 0.4);
+                }
+            } finally {
+                overlay.style.display = 'none';
+                await fijarCamara(false);
+            }
+            return { blobs, desafio_id: d.id, indices };
+        }
+
+        // Chequeo rapido de presencia (1 foto). Si no hay nadie, el servidor
+        // usa esa foto para aprender el fondo del kiosco.
+        async function hayRostro() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+            const r = await fetch('/api/validar_rostro', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ frame: canvas.toDataURL('image/jpeg', 0.7), kiosco: true })
+            });
+            return await r.json();
+        }
+
+        // ==========================================================
         // Camara arranca AUTOMATICA (sin boton)
         // ==========================================================
         navigator.mediaDevices.getUserMedia({
             video: { width: 640, height: 480, facingMode: 'user' }
         })
-        .then(stream => {
+        .then(async stream => {
             video.srcObject = stream;
-            setInterval(reconocer, 1500);
+            videoTrack = stream.getVideoTracks()[0];
+            try { cfg = await (await fetch('/api/liveness/config')).json(); } catch (e) {}
+            setInterval(reconocer, 700);
         })
         .catch(() => {
             updateStatus('error', 'fa-video-slash', 'Error de Camara', 'No se pudo acceder al dispositivo.');
         });
 
         // ==========================================================
-        // Reconocimiento continuo
+        // Reconocimiento continuo: presencia -> rafaga -> una decision
         // ==========================================================
         async function reconocer() {
-            if (isProcessing || hablando) return;   // bloqueado si esta hablando
+            if (isProcessing || hablando || Date.now() < pausaHasta) return;
             isProcessing = true;
 
             try {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0);
+                const pre = await hayRostro();
+                if (!pre.ok) {
+                    if (pre.code === 'LOW_LIGHT') {
+                        updateStatus('error', 'fa-lightbulb', 'Poca Luz', pre.msg);
+                    }
+                    return;
+                }
+                updateStatus('scanning', 'fa-search', 'Verificando...', 'No te muevas, por favor');
 
-                const blob = await (await fetch(canvas.toDataURL('image/jpeg', 0.85))).blob();
+                const rafaga = await capturarRafaga(cfg.modo);
                 const formData = new FormData();
-                formData.append('foto', blob, 'frame.jpg');
+                rafaga.blobs.forEach((b, i) => formData.append('fotos', b, `f${i}.jpg`));
+                if (rafaga.desafio_id) {
+                    formData.append('desafio_id', rafaga.desafio_id);
+                    formData.append('indices', JSON.stringify(rafaga.indices));
+                }
 
-                const response = await fetch('/api/reconocer', { method: 'POST', body: formData });
+                const response = await fetch('/api/reconocer_rafaga', { method: 'POST', body: formData });
                 const data = await response.json();
 
                 switch (data.status) {
@@ -410,15 +503,6 @@
                         updateStatus('success', 'fa-check-circle', 'Acceso Permitido', data.message);
                         showUserDetails(data);
                         hablar(`Bienvenido, ${data.comensal.nombre} ${data.comensal.apellido}`);
-                        break;
-
-                    case 'SCANNING':
-                        updateStatus('scanning', 'fa-search', 'Verificando...', data.message);
-                        if (data.partial) {
-                            document.getElementById('valNombre').textContent = data.partial.nombre;
-                            document.getElementById('valConfianza').textContent = data.partial.confianza + '%';
-                            userDetails.style.display = 'block';
-                        }
                         break;
 
                     case 'LIVENESS_FAILED':
@@ -430,27 +514,30 @@
                     case 'COOLDOWN':
                         updateStatus('cooldown', 'fa-clock', 'Ya Registrado', data.message);
                         userDetails.style.display = 'none';
-                        hablar(`Ya registraste tu asistencia`);
+                        hablar('Ya registraste tu asistencia');
                         break;
 
                     case 'REJECTED':
                         updateStatus('error', 'fa-times-circle', 'Rechazado', data.message);
                         userDetails.style.display = 'none';
-                        setTimeout(resetInterface, 3000);
+                        pausaHasta = Date.now() + 4000;
+                        setTimeout(resetInterface, 4000);
                         break;
 
                     case 'NO_MATCH':
                         updateStatus('error', 'fa-user-slash', 'No Reconocido', 'Rostro no registrado');
                         userDetails.style.display = 'none';
-                        setTimeout(resetInterface, 2000);
+                        pausaHasta = Date.now() + 2500;
+                        setTimeout(resetInterface, 2500);
                         break;
 
-                    case 'NO_FACE':
-                    case 'LOW_QUALITY':
-                    case 'TOO_FAR':
+                    case 'LOW_LIGHT':
+                        updateStatus('error', 'fa-lightbulb', 'Poca Luz', data.message);
+                        userDetails.style.display = 'none';
                         break;
 
-                    default:
+                    default:   // NO_FACE, LOW_QUALITY, TOO_FAR, ERROR: la persona se movio o se fue
+                        resetInterface();
                         break;
                 }
 
@@ -537,21 +624,7 @@
                     setTimeout(resetInterface, 1000);
                 }, 10000);
 
-                utter.onend = () => {
-                    clearTimeout(safetyTimer);
-                    hablando = false;
-                    setTimeout(resetInterface, 2000);
-                };
-                utter.onerror = () => {
-                    clearTimeout(safetyTimer);
-                    hablando = false;
-                    setTimeout(resetInterface, 1500);
-                };
-
-                speechSynthesis.speak(utter);
-
-                // Workaround Chrome bug: Chrome pausa utterances largos despues de ~15s
-                // Este resume interval mantiene la voz activa
+                // Workaround Chrome: pausa utterances largos despues de ~15s
                 const resumeInterval = setInterval(() => {
                     if (!speechSynthesis.speaking) {
                         clearInterval(resumeInterval);
@@ -567,6 +640,14 @@
                     hablando = false;
                     setTimeout(resetInterface, 2000);
                 };
+                utter.onerror = () => {
+                    clearInterval(resumeInterval);
+                    clearTimeout(safetyTimer);
+                    hablando = false;
+                    setTimeout(resetInterface, 1500);
+                };
+
+                speechSynthesis.speak(utter);
             } catch (e) {
                 hablando = false;
                 setTimeout(resetInterface, 2000);

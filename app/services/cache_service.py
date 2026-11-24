@@ -134,9 +134,10 @@ class EmbeddingCache:
 
         Formula: new_avg = normalize((1-weight) * old_avg + weight * new_emb)
         weight=0.15 significa que el nuevo embedding influye un 15% en el promedio.
+        Devuelve el embedding actualizado, o None si el comensal no esta en cache.
         """
         if comensal_id not in self._data:
-            return False
+            return None
 
         new_emb = new_embedding.astype(np.float32)
         norm = np.linalg.norm(new_emb)
@@ -160,7 +161,11 @@ class EmbeddingCache:
             self._matrix[idx] = blended
 
         logger.info(f"Embedding enriquecido: comensal {comensal_id} (weight={weight})")
-        return True
+        return blended
+
+    def info(self, comensal_id: int) -> Optional[dict]:
+        """Nombre, apellido y DNI de un comensal en cache (o None)."""
+        return self._data.get(comensal_id)
 
     @property
     def count(self):

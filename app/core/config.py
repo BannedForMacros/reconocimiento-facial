@@ -6,7 +6,6 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "cambiar-en-produccion-clave-super-secreta"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 480
-    EMBEDDING_DIM: int = 512
 
     # === Reconocimiento Facial ===
     MATCH_THRESHOLD: float = 0.45
@@ -61,10 +60,6 @@ class Settings(BaseSettings):
     LUZ_RESPUESTA_MIN: float = 0.02
     # Rendimiento: tamano de entrada del detector (640 = original, 480/320 = mas rapido)
     DET_SIZE: int = 480
-
-    # === Sistema de Votacion ===
-    VOTING_WINDOW: int = 5
-    VOTING_THRESHOLD: int = 3
 
     # === Cooldown ===
     ATTENDANCE_COOLDOWN_MINUTES: int = 30

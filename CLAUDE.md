@@ -55,7 +55,10 @@ psql -U postgres -d comedor_db -f scripts\crear_bd.sql
 - El recorte con contexto se desplaza en los bordes de la imagen, en vez de achicarse, igual que en `CropImage` de Silent-Face.
 - `FaceAnalysis` carga solo `detection`, `recognition` y `landmark_2d_106`. Quitar los otros módulos ahorra ~35% de tiempo. `DET_SIZE=480`.
 
-## Flujo del kiosco (`templates/reconocimiento.html` → `app/routes/rafaga.py`)
+## Flujo del kiosco (`/` = `templates/index.html` → `app/routes/rafaga.py`)
+
+El kiosco es la página principal. `/reconocimiento` solo redirige a `/`. El flujo viejo de una foto (`/api/reconocer` con votación) se eliminó: todo pasa por la ráfaga.
+
 
 0. **Espera.** Cada 0.7 s el kiosco consulta `/api/validar_rostro` con `kiosco: true`. Si no hay cara, `referencia_fondo.actualizar()` aprende el fondo vacío.
 1. **Ráfaga.** Toma 5 fotos cada 180 ms con la exposición y el balance de blancos bloqueados y las envía a `POST /api/reconocer_rafaga`. En modo luz, antes pide una secuencia de colores de un solo uso a `POST /api/liveness/desafio`.
@@ -68,7 +71,7 @@ psql -U postgres -d comedor_db -f scripts\crear_bd.sql
    - **Luz.** Correlación entre la cromaticidad de la piel y los colores mostrados, ≥0.5. Los colores cambian a menos de 3 por segundo (WCAG).
    - **Modo sombra.** Con `LIVENESS_CAPAS_ACTIVAS=False` las capas solo escriben en `data/liveness_log.jsonl` y no rechazan. Hay que activarlas después de calibrar.
 5. **Identidad.** ArcFace contra el caché en memoria (`cache_service`). La misma persona tiene que salir en ≥60% de las fotos. Si no: `NO_MATCH`.
-6. **Cooldown.** `_cooldowns` es compartido con `/api/reconocer`. Si ya marcó: `COOLDOWN`.
+6. **Cooldown.** `_cooldowns` vive en `app/routes/reconocimiento.py` y lo consulta la ráfaga. Si ya marcó: `COOLDOWN`. Solo se activa en `_confirmar_asistencia` cuando la asistencia se guarda; un rechazo (fuera de horario, comida ya consumida) no bloquea.
 7. **Asistencia.** `_confirmar_asistencia()` en `reconocimiento.py` responde `MATCH`, con mensaje y voz.
 
 - **Decisión de liveness:** `fas_ok and (capas_ok or not LIVENESS_CAPAS_ACTIVAS)`, con `capas_ok = prof_ok and fondo_ok and ref_ok and luz_ok`.
@@ -93,6 +96,13 @@ Las pruebas usaron datos públicos y ataques simulados. **Todavía falta confirm
 | Velocidad | 334 → 145–177 ms por foto. La decisión bajó de ~4.5 s a **~2 s** (~2.8 s en modo luz) |
 | Luz del día a la noche | Con 8% de luz ArcFace ya no reconoce (distancia 0.469). Por eso se agregó el aviso `LOW_LIGHT` |
 
+## Convenciones del código
+
+- El trabajo pesado de CPU (detección, liveness) se ejecuta con `run_in_threadpool` para no bloquear el servidor.
+- `app/routes/reconocimiento.py` ya no tiene endpoints: solo `_confirmar_asistencia`, los horarios de comida y el cooldown.
+- Los endpoints de `app/routes/reportes.py` exigen el token del login (`get_current_user`).
+- Para leer el caché de huellas se usan `cache.info()` y el valor que devuelve `enrich_embedding()`, no `cache._data`.
+
 ## Limitaciones y pendientes
 
 - La capa de **luz no está medida** en hardware real. Hay que calibrar en el kiosco con los dos modos y luego decidir el modo y activar las capas.
@@ -100,4 +110,3 @@ Las pruebas usaron datos públicos y ataques simulados. **Todavía falta confirm
 - Un video grabado con la misma cámara y encuadre del kiosco, en una pantalla que tape todo el lente, pasa el fondo de referencia.
 - Cambiar la contraseña de `admin` después de instalar.
 - `.env` estuvo versionado en commits anteriores a este cambio. Si el repositorio es público, conviene rotar la contraseña de postgres y `SECRET_KEY`.
-- `FONDO_REF_TOLERANCIA` en config ya no se usa.

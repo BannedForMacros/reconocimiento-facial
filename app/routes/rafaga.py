@@ -213,7 +213,7 @@ async def reconocer_rafaga(
         return {"success": False, "status": "LIVENESS_FAILED",
                 "message": "Intento de suplantacion detectado", "liveness": senales}
 
-    # --- Identidad: mayoria de los fotogramas de la rafaga (reemplaza los 3 votos) ---
+    # --- Identidad: mayoria de los fotogramas de la rafaga ---
     votos = {}
     for _, _, det in r["detecciones"]:
         m = cache.find_match(det["embedding"], settings.MATCH_THRESHOLD)
@@ -228,17 +228,16 @@ async def reconocer_rafaga(
     dist = float(np.mean([d for d, _ in votos[cid]]))
     mejor_emb = min(votos[cid], key=lambda x: x[0])[1]
 
-    # Cooldown compartido con /reconocer
+    # Cooldown (se activa en _confirmar_asistencia al registrar la asistencia)
     now = time.time()
     cooldown_secs = settings.ATTENDANCE_COOLDOWN_MINUTES * 60
     if cid in _cooldowns and now - _cooldowns[cid] < cooldown_secs:
         rest = int(cooldown_secs - (now - _cooldowns[cid]))
-        info = cache._data.get(cid, {})
+        info = cache.info(cid) or {}
         registrar_senales(modo, senales, "COOLDOWN")
         return {"success": False, "status": "COOLDOWN",
                 "message": f"Ya registraste asistencia. Espera {rest // 60}m {rest % 60}s.",
                 "comensal": {"nombre": info.get("nombre"), "apellido": info.get("apellido")}}
-    _cooldowns[cid] = now
 
     registrar_senales(modo, senales, "MATCH")
     return await _confirmar_asistencia(db, cache, cid, dist, senales["minifasnet"], mejor_emb, senales)
