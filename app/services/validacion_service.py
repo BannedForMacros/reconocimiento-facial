@@ -1,14 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, desc
-from app.models.marcacion import Marcacion
+from sqlalchemy import select, and_
 from app.models.asistencia import Asistencia
 from app.models.intento_acceso import IntentoAcceso
-from datetime import datetime, timedelta
+from datetime import date, datetime
 from typing import Optional, Dict
 
 class ValidacionService:
-    
-    COOLDOWN_SEGUNDOS = 300  # 5 minutos
     
     async def validar_marcacion(
         self, 
@@ -21,7 +18,7 @@ class ValidacionService:
         """Valida si se puede realizar la marcación"""
         ahora = datetime.now()
         
-        # 1. ELIMINAR COOLDOWN - Solo verificar comida consumida
+        # 1. Comida ya consumida hoy (el cooldown corto lo controla la ruta)
         ya_consumio = await self._verificar_comida_consumida(db, comensal_id, ahora.date(), comida)
         
         if ya_consumio:
@@ -56,25 +53,11 @@ class ValidacionService:
             "mensaje": "Marcación válida"
         }
     
-    async def _obtener_ultima_marcacion(
-        self, 
-        db: AsyncSession, 
-        comensal_id: int
-    ) -> Optional[Marcacion]:
-        """Obtiene la última marcación del comensal"""
-        result = await db.execute(
-            select(Marcacion)
-            .where(Marcacion.comensal_id == comensal_id)
-            .order_by(desc(Marcacion.fecha_hora))
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
-    
     async def _verificar_comida_consumida(
         self,
         db: AsyncSession,
         comensal_id: int,
-        fecha: datetime.date,
+        fecha: date,
         comida: str
     ) -> bool:
         """Verifica si ya consumió esta comida hoy"""

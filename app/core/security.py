@@ -8,9 +8,6 @@ def verify_password(plain_password, hashed_password):
     test_hash = hashlib.sha256(plain_password.encode()).hexdigest()
     return test_hash == hashed_password
 
-def get_password_hash(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
 def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
