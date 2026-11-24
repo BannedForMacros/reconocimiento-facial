@@ -96,6 +96,24 @@ Las pruebas usaron datos públicos y ataques simulados. **Todavía falta confirm
 | Velocidad | 334 → 145–177 ms por foto. La decisión bajó de ~4.5 s a **~2 s** (~2.8 s en modo luz) |
 | Luz del día a la noche | Con 8% de luz ArcFace ya no reconoce (distancia 0.469). Por eso se agregó el aviso `LOW_LIGHT` |
 
+### Prueba de exactitud con 94 registrados y 56 desconocidos (24 de noviembre de 2026)
+
+El detalle completo está en **`docs/pruebas-exactitud.md`**. Los scripts están en `scripts/pruebas/`.
+
+| Métrica | Resultado |
+|---|---|
+| Reconocimiento correcto en el kiosco, con ráfaga y otro video del mismo actor | **94.5%**. Todo el 5.5% restante falló por calidad (`det_score < 0.80`) |
+| Reconocimiento correcto en fotos de otros años (LFW) | 94.8% |
+| Confusiones con otra persona y desconocidos aceptados | **0%** (121 intentos de desconocidos; 172,396 pares de personas distintas, el más parecido a 0.695) |
+| Galería de 94 a 1,928 personas | Sin cambios |
+| Anti-duplicado | 15 de 15 bloqueados |
+| MiniFASNet en CelebA-Spoof | AUC 0.83; con umbral 0.50 pasa el 53.7% de los ataques |
+| Foto en la mano | **Pasa el 100% en modo sombra** y el 0% con las capas activas (las personas reales pasan el 98.2%) |
+
+- **Recomendaciones:** activar las capas, probar `DETECTION_CONFIDENCE=0.70` (recuperaba todas las fallidas) y mantener `MATCH_THRESHOLD=0.45`.
+- **Es optimista:** no mide lentes, personas parecidas, gemelos ni el paso de semanas. Los datos son de otra población y no se usó la cámara real.
+- **La BD de prueba** quedó con 94 comensales (apellido `PRUEBA-*`, DNI `9000xxxx`). Hay que borrarlos antes de producción.
+
 ## Convenciones del código
 
 - El trabajo pesado de CPU (detección, liveness) se ejecuta con `run_in_threadpool` para no bloquear el servidor.
@@ -109,4 +127,6 @@ Las pruebas usaron datos públicos y ataques simulados. **Todavía falta confirm
 - El fondo de referencia necesita **un fondo con textura** detrás del usuario, por ejemplo un póster. Con una pared lisa devuelve `sin_referencia` y no bloquea.
 - Un video grabado con la misma cámara y encuadre del kiosco, en una pantalla que tape todo el lente, pasa el fondo de referencia.
 - Cambiar la contraseña de `admin` después de instalar.
+- Faltan pruebas con lentes (MeGlass), con las parejas más parecidas de LFW y un piloto con alumnos reales. Ver `docs/pruebas-exactitud.md`.
+- Borrar los comensales `PRUEBA-*` de la BD antes de producción.
 - `.env` estuvo versionado en commits anteriores a este cambio. Si el repositorio es público, conviene rotar la contraseña de postgres y `SECRET_KEY`.
