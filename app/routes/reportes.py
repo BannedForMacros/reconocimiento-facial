@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from app.core.database import get_db
 from app.models.marcacion import Marcacion
 from app.models.comensal import Comensal
 from app.models.asistencia import Asistencia
+from app.models.intento_acceso import IntentoAcceso
+from app.routes.auth import get_current_user
 from datetime import datetime, date, timedelta
 
-router = APIRouter(prefix="/api", tags=["reportes"])
+# Todos los reportes exigen el token del login (el dashboard ya lo envia)
+router = APIRouter(prefix="/api", tags=["reportes"], dependencies=[Depends(get_current_user)])
 
 @router.get("/kpis")
 async def get_kpis(db: AsyncSession = Depends(get_db)):
@@ -77,7 +80,10 @@ async def get_distribucion_horarios(
     if not fecha:
         fecha = date.today()
     else:
-        fecha = datetime.strptime(fecha, "%Y-%m-%d").date()
+        try:
+            fecha = datetime.strptime(fecha, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Fecha invalida, use AAAA-MM-DD")
     
     result = await db.execute(
         select(Asistencia).where(Asistencia.fecha == fecha)
@@ -102,9 +108,6 @@ async def get_intentos_sospechosos(
     db: AsyncSession = Depends(get_db)
 ):
     """Obtiene intentos de acceso sospechosos"""
-    from app.models.intento_acceso import IntentoAcceso
-    from app.models.comensal import Comensal
-    
     query = select(IntentoAcceso, Comensal).outerjoin(
         Comensal, IntentoAcceso.comensal_id == Comensal.id
     ).where(
@@ -135,9 +138,6 @@ async def get_intentos_sospechosos(
 @router.get("/estadisticas_seguridad")
 async def get_estadisticas_seguridad(db: AsyncSession = Depends(get_db)):
     """KPIs de seguridad"""
-    from app.models.intento_acceso import IntentoAcceso
-    from datetime import date, timedelta
-    
     hoy = date.today()
     hace_7_dias = hoy - timedelta(days=7)
     

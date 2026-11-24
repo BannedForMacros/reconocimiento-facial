@@ -1,5 +1,7 @@
+from starlette.concurrency import run_in_threadpool
 from fastapi import APIRouter, Request, Depends
 from fastapi.responses import JSONResponse
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
@@ -39,7 +41,7 @@ async def validar_rostro(request: Request):
         if image is None:
             return {"ok": False, "msg": "Imagen invalida"}
 
-        detection = face_service.detect_face(image)
+        detection = await run_in_threadpool(face_service.detect_face, image)
         if detection is None:
             # Kiosco vacio: aprender/actualizar su fondo de referencia
             if body.get("kiosco"):
@@ -68,7 +70,7 @@ async def validar_rostro(request: Request):
             }
 
         # Liveness check
-        liveness = liveness_service.analyze(image, detection["bbox"])
+        liveness = await run_in_threadpool(liveness_service.analyze, image, detection["bbox"])
         if liveness["detail"] == "low_light":
             return {
                 "ok": False,
@@ -87,7 +89,8 @@ async def validar_rostro(request: Request):
         }
 
     except Exception as e:
-        return {"ok": False, "msg": f"Error: {str(e)}"}
+        logger.exception(f"Error en validar_rostro: {e}")
+        return {"ok": False, "msg": "Error al procesar la imagen"}
 
 
 @router.post("/registrar_multiframe")
@@ -158,7 +161,7 @@ async def registrar_multiframe(
                 continue
 
             # Detectar rostro
-            detection = face_service.detect_face(image)
+            detection = await run_in_threadpool(face_service.detect_face, image)
             if detection is None:
                 rejection_reasons["no_face"] += 1
                 continue
@@ -177,7 +180,7 @@ async def registrar_multiframe(
                 continue
 
             # Liveness check
-            liveness = liveness_service.analyze(image, detection["bbox"])
+            liveness = await run_in_threadpool(liveness_service.analyze, image, detection["bbox"])
             if liveness["detail"] == "low_light":
                 rejection_reasons["low_light"] += 1
                 continue
