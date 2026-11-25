@@ -1,0 +1,4 @@
+# Dependencias extra SOLO para las pruebas de exactitud y la simulacion del comedor
+# (el sistema no las necesita). Instalar con:  .venv\Scripts\python.exe -m pip install -r requirements-pruebas.txt
+pyarrow==25.0.1
+matplotlib==3.10.9

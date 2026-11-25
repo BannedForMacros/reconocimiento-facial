@@ -14,3 +14,6 @@ data/
 
 # Detector de objetos YOLOX probado para liveness: no se usa (no mejoro los resultados)
 models/objetos/
+
+# Datasets publicos de las pruebas (fotos de rostros de terceros, ~1.5 GB): se bajan con scripts/pruebas/descargar_datos.py
+datos_pruebas/
