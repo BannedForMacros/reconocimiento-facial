@@ -202,11 +202,11 @@ def clasificar(tipo, cid_real, cid_det, status):
         return ("OK", True) if cid_det == cid_real else ("CF", False)
     if tipo == "impostor":
         return ("FA", False) if cid_det is not None else ("TN", True)
-    return ("ATAQUE_PASA", False) if status in ("MATCH", "REJECTED", "COOLDOWN") else ("ATAQUE_BLOQUEADO", True)
+    return ("ATAQUE_PASA", False) if status in ("MATCH_CONFIRMED", "REJECTED", "COOLDOWN") else ("ATAQUE_BLOQUEADO", True)
 
 def detectado(status):
     """Comensal identificado por el endpoint (misma regla de mayoria), o None si no identifico a nadie."""
-    if status in ("MATCH", "REJECTED", "COOLDOWN") and "D" in CAP:
+    if status in ("MATCH_CONFIRMED", "REJECTED", "COOLDOWN") and "D" in CAP:
         D, ids = CAP["D"], CAP["ids"]
         j = D.argmin(1); d = D[np.arange(len(j)), j]
         votos = collections.Counter(ids[k] for k, dd in zip(j, d) if dd < settings.MATCH_THRESHOLD)

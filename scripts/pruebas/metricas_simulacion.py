@@ -94,7 +94,43 @@ for t in (0.35, 0.40, 0.45, 0.50, 0.55, 0.60):
                     "F1_%": round(200 * prec * rec / (prec + rec), 2) if prec + rec else 0,
                     "accuracy_%": pct(tp + tn, n_gen_total + len(impc))}
 OUT["barrido_umbral"] = barr
-OUT["ataques"] = RES["ataques"]
+ata = collections.Counter(("capas_activas" if f["capas_activas"] else "modo_actual", f["condicion"], f["clase"]) for f in AUD if f["tipo"] == "ataque")
+OUT["ataques_APCER"] = {}
+for modo in ("modo_actual", "capas_activas"):
+    for cond in sorted({k[1] for k in ata}):
+        pasa, blo = ata[(modo, cond, "ATAQUE_PASA")], ata[(modo, cond, "ATAQUE_BLOQUEADO")]
+        if pasa + blo: OUT["ataques_APCER"][f"{modo}|{cond}"] = {"pasan": pasa, "n": pasa + blo, "APCER_%": pct(pasa, pasa + blo),
+                                                                  "IC95": wilson(pasa, pasa + blo), "limite_sup_95_%": cp_sup(pasa, pasa + blo)}
+
+# Q de Cochran por turno: bloques alumno-dia que fueron a los 3 turnos; exito = reconocido en el primer intento
+blo = collections.defaultdict(dict)
+for f in AUD:
+    if f["tipo"] == "registrado" and f["intento"] == 1: blo[(f["persona"], f["dia"])][f["comida"]] = int(f["clase"] == "OK")
+X = np.array([[b["desayuno"], b["almuerzo"], b["cena"]] for b in blo.values() if len(b) == 3])
+if len(X):
+    k = 3; Cj, Ri, N = X.sum(0), X.sum(1), X.sum()
+    Q = (k - 1) * (k * (Cj ** 2).sum() - N ** 2) / (k * N - (Ri ** 2).sum())
+    OUT["cochran_turnos"] = {"bloques": int(len(X)), "exito_1er_intento_%": dict(zip(("desayuno", "almuerzo", "cena"), (100 * X.mean(0)).round(1).tolist())),
+                             "Q": round(float(Q), 2), "gl": 2, "p": f"{1 - st.chi2.cdf(Q, 2):.2e}"}
+
+# FNIR por sexo (atributo "Male" de LFW) con prueba exacta de Fisher
+import os
+_base = os.path.dirname(os.path.abspath(sys.argv[1]))
+attr = next((c for c in (os.path.join(_base, "lfw_attributes.txt"), os.path.join(_base, "datos", "lfw_attributes.txt"),
+                         os.path.join("datos_pruebas", "lfw_attributes.txt")) if os.path.exists(c)), "")
+if os.path.exists(attr):
+    L = open(attr).read().splitlines(); H = L[1].lstrip("#").strip().split("	"); male = collections.defaultdict(list)
+    for l in L[2:]:
+        r = dict(zip(H, l.split("	"))); male[r["person"].replace(" ", "_")].append(float(r["Male"]))
+    g = collections.defaultdict(lambda: [0, 0])
+    for f in AUD:
+        if f["tipo"] == "registrado" and f["persona"] in male:
+            sx = "H" if np.mean(male[f["persona"]]) > 0 else "M"; g[sx][1] += 1; g[sx][0] += f["clase"] != "OK"
+    if "H" in g and "M" in g:
+        o, pf = st.fisher_exact([[g["H"][0], g["H"][1] - g["H"][0]], [g["M"][0], g["M"][1] - g["M"][0]]])
+        OUT["FNIR_por_sexo"] = {"H": {"FNIR_%": pct(*g["H"]), "IC95": wilson(*g["H"]), "n": g["H"][1]},
+                                "M": {"FNIR_%": pct(*g["M"]), "IC95": wilson(*g["M"]), "n": g["M"][1]},
+                                "odds_ratio": round(float(o), 2), "p_Fisher": f"{pf:.3g}"}
 OUT["muestra"] = {"registrados": len(RES["galeria_ids"]), "impostores": RES["impostores"]}
 json.dump(OUT, open(sys.argv[1].replace(".json", "_metricas.json"), "w", encoding="utf-8"), indent=1, ensure_ascii=False, default=str)
 print(json.dumps(OUT, indent=1, ensure_ascii=False, default=str))
