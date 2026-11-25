@@ -114,6 +114,27 @@ El detalle completo está en **`docs/pruebas-exactitud.md`**. Los scripts están
 - **Es optimista:** no mide lentes, personas parecidas, gemelos ni el paso de semanas. Los datos son de otra población y no se usó la cámara real.
 - **La BD de prueba** quedó con 94 comensales (apellido `PRUEBA-*`, DNI `9000xxxx`). Hay que borrarlos antes de producción.
 
+### Pruebas A y B y métricas ISO (25 de noviembre de 2026)
+
+El detalle está en `docs/pruebas-exactitud.md`.
+
+- **Lentes:** con lentes de medida reconoce el 86.6%, contra 96% sin lentes. Con lentes oscuros, el 60.8%. No hubo confusiones.
+- **Latinos y parecidos:** de 1,377 latinos de FairFace (los "dobles"), 0 entraron. El más parecido quedó a 0.64.
+- **ISO:**
+  - Accuracy = tasa de identificación correcta = **94.7%**. Es una sola: OK/N_leg, sin mezclar impostores.
+  - FNIR 5.3%, F1 97.3%.
+  - FPIR ≤3% por intento.
+  - APCER de la foto en la mano: 100% en modo sombra y 0% con capas. BPCER con capas: 1.8%.
+
+## Pruebas en otra máquina
+
+- **Preparación y prompt:** `docs/prompt-simulacion-comedor.md`.
+- **Datos públicos:** van a `datos_pruebas/`, que no se sube. Se bajan con `scripts/pruebas/descargar_datos.py`.
+- **Dependencias extra:** `requirements-pruebas.txt` (pyarrow y matplotlib).
+- **Huellas de población:** se generan con `scripts/pruebas/embeddings_poblacion.py`.
+- **Simulación:** `scripts/pruebas/simulacion_comedor.py`. Son 10 días hábiles × 3 turnos, 100 registrados, 30 impostores × 5 intentos y 40 ataques, con reloj simulado y la tabla `auditoria_pruebas`. Tarda ~1 h en CPU.
+- **Métricas de la simulación:** `scripts/pruebas/metricas_simulacion.py`.
+
 ## Convenciones del código
 
 - El trabajo pesado de CPU (detección, liveness) se ejecuta con `run_in_threadpool` para no bloquear el servidor.

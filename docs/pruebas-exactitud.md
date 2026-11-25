@@ -151,3 +151,100 @@ Se probó el sistema completo (registro, kiosco por ráfaga, identidad y livenes
 - La prueba dejó **94 comensales de prueba** en `comedor_db`, con apellido `PRUEBA-CREMA` o `PRUEBA-LFW` y DNI `9000xxxx`, junto con sus embeddings e intentos de acceso.
 - Al volver a correr `eval_exactitud.py`, primero se borran los de la corrida anterior.
 - **Hay que borrarlos antes de usar el sistema en producción.**
+
+---
+
+# Pruebas A (lentes) y B (población latina y parecidos), 25 de noviembre de 2026
+
+Cada prueba registró **exactamente 100 personas** por `/api/registrar_multiframe`. Los scripts son `scripts/pruebas/prueba_lentes_latinos.py` y `scripts/pruebas/seleccion_vggface2.py`.
+
+- **Liveness en el registro:** se desactivó solo en el registro de la prueba, porque las imágenes de los datasets son fotos y MiniFASNet las rechaza (correctamente). La detección, la calidad y el anti-duplicado fueron los del endpoint.
+- **"Webcam barata":** la misma foto con baja resolución, poca luz, ruido y JPEG fuerte.
+
+## A. Lentes (LFW + atributos de Columbia, 100 registrados sin lentes)
+
+| Consulta | Reconoce bien | No la reconoce | Calidad | Confunde |
+|---|---|---|---|---|
+| Sin lentes (control, 74) | 96.0% | 0% | 4.1% | 0% |
+| Con lentes de medida (231) | **86.6%** | 5.6% | 7.8% | 0% |
+| Con lentes, webcam barata | 85.3% | 7.8% | 6.9% | 0% |
+| Registrado con lentes, viene sin lentes (115) | 86.1% | 8.7% | 5.2% | 0% |
+| Lentes oscuros (39 personas, 51 fotos) | **60.8%** | 27.5% | 11.8% | 0% |
+| Lentes oscuros, webcam barata | 51.0% | 29.4% | 19.6% | 0% |
+
+- **Distancia a su propio registro:** sin lentes 0.22, con lentes 0.31 (6–8% sobre 0.45), con lentes oscuros 0.44 (31–37% sobre 0.45).
+- **Umbral con lentes y webcam barata:**
+
+| Umbral | Reconoce bien |
+|---|---|
+| 0.45 | 85.3% |
+| **0.50** | **89.6%** |
+| 0.55 | 91.8% |
+
+  En los tres casos hubo 0 confusiones.
+
+## B. Población latina y parecidos (100 registrados de VGGFace2)
+
+- **Selector de población:** regresión logística sobre ArcFace, entrenada con FairFace. En FairFace, cuando marca a alguien como latino acierta el 88.2%, pero solo encuentra al 48.4% de los latinos.
+- **Muestra:** la galería quedó **enriquecida en rostros latinos, no 100% latina**; se revisó a ojo con una hoja de contacto.
+- **Formato de VGGFace2:** sus recortes son muy ajustados, así que se les agregó un margen gris de 112 px para que el detector viera la cabeza completa.
+
+| Desconocidos | Intentos | Aceptados con 0.45 / 0.55 | Distancia del más parecido |
+|---|---|---|---|
+| Latinos de FairFace (etiquetados por personas) | 1,377 | 0% / 0% | 0.65 |
+| Latinos de FairFace con webcam barata | 294 | 0% / 0% | 0.64 |
+| Latinos no registrados de VGGFace2 (300 personas) | 900 | 0% / 0% | — |
+| Otros grupos (FairFace) | 900 | 0% / 0% | 0.69 |
+
+- **Dobles:** ninguno de los 100 tiene un "doble" bajo 0.55. El doble de cada registrado queda en promedio a 0.77, y el más cercano de todos a 0.64.
+- **Entre latinos** los dobles quedan algo más cerca que en otros grupos (0.65 contra 0.69).
+- **Reconocimiento de los registrados:**
+  - 52.6% en la foto original y 17.0% con webcam barata, con 0 confusiones.
+  - Casi todo el fallo es de calidad (`det_score < 0.80`), por los recortes ajustados, las fotos de perfil y las décadas de diferencia.
+  - De las fotos que pasaron la calidad, se reconoció el 76%.
+  - **No representa al kiosco: es un peor caso extremo.**
+
+---
+
+# Métricas ISO/IEC 19795-1 y 30107-3 (datos de la prueba de exactitud)
+
+Se calcularon con `scripts/pruebas/metricas_iso.py` sobre la prueba de exactitud: 94 registrados, 283 intentos legítimos, 56 impostores con 121 intentos, y ataques. Los intervalos son Wilson al 95%. Cuando no hubo errores se da el límite superior de Clopper-Pearson al 95%.
+
+> **Una sola accuracy:** Tasa de identificación correcta = OK / N_leg. No se usa (OK + impostores rechazados) / total, porque mezcla grupos y sale inflada.
+
+| Grupo | Métrica | Valor |
+|---|---|---|
+| Registro | FTE | 11.3% (6.6–18.8), 12 de 106 |
+| Registro | FTA | 5.7% (3.8–8.4): 14 de baja calidad, 9 sin rostro |
+| Registro | Calidad media | 14.2 de 15 fotogramas válidos (DE 1.6) |
+| Legítimos | **Tasa de identificación correcta (accuracy)** | **94.7% (91.4–96.8)**: OK 268, NR 15, CF 0 |
+| Legítimos | FNIR / FRR | 5.3% (3.2–8.6) |
+| Legítimos | Tasa de confusión | 0 de 283, **≤1.3%** |
+| Legítimos | Precision / Recall / F1 | 100% / 94.7% / **97.3%** |
+| Legítimos | Tasa correcta total, con reintentos por vida | 92.9% (kiosco, capas activas) |
+| Impostores | FPIR por intento | 0 de 121, **≤3.0%** |
+| Impostores | FPIR por persona | 0 de 56, **≤6.4%** |
+| Umbral | Distancia misma persona | 0.149 ± 0.086 |
+| Umbral | Distancia personas distintas | 0.995 ± 0.058 (mínimo 0.657) |
+| Umbral | FMR en 0.45 | 0 de 267,140 pares, **≤1.4×10⁻⁵** |
+| Umbral | FNMR en 0.45 | 0.30% |
+| Umbral | EER | 0.15% (en 0.80). Faltan pares de impostores cerca del umbral |
+| Umbral | Confianza en 0.45 | 77.5% |
+| Vida | APCER foto en la mano | **100%** en modo sombra, **0% (≤4.4%)** con capas |
+| Vida | APCER impresión o pantalla (CelebA-Spoof, MiniFASNet) | 53.7% |
+| Vida | APCER global, modo actual | 56.4% |
+| Vida | BPCER kiosco real (CREMA-D) | 0% (≤2.2%) actual, **1.8% (0.6–5.1)** con capas |
+| Equidad | FNIR hombres / mujeres | 6.2% / 3.4% (Fisher p = 0.40, sin diferencia significativa) |
+| Equidad | FNIR hispanos / no hispanos (kiosco) | 12.5% (n = 8) / 4.9% (p = 0.37, muestra hispana muy chica) |
+| Equidad | FNIR sin lentes / con lentes / lentes oscuros | 4.1% / 13.4% / 39.2% |
+
+- **Tiempos:**
+
+| Medición | Mediana | RIC | p90 |
+|---|---|---|---|
+| Endpoint completo | 0.93 s | 0.89–1.11 s | 1.38 s |
+| Registro | 4.16 s | — | — |
+
+  Eso da **~30 personas por minuto** solo contando el sistema. El tiempo manual **no está medido**.
+- **Curva DET:** `docs/img/curva_det_prueba1.png`.
+- **Simulación del comedor:** el FNIR por turno y la Q de Cochran salen de `scripts/pruebas/simulacion_comedor.py`. El prompt para correrla en otra máquina está en `docs/prompt-simulacion-comedor.md`.
